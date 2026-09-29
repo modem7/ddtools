@@ -219,8 +219,9 @@ ruff check . && ruff format --check .
 - `ddtools.pdfstyle` values set the look of every document; changing one changes every
   campaign's PDFs, and their golden tests will say so.
 - To release: bump `__version__` in `src/ddtools/__init__.py`, add a `CHANGELOG.md`
-  section, merge, then push the tag `vX.Y.Z`. The release workflow checks the tag matches
-  and publishes the GitHub release.
+  section and merge. Then either press **Run workflow** under Actions → Release, or push
+  the tag `vX.Y.Z`. The release workflow tags master if needed, checks the tag matches
+  and publishes the GitHub release with that section as its notes.
 
 ## Licence
 

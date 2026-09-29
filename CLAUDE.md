@@ -18,7 +18,7 @@
 - **`ddtools init` never touches an edited file** (it compares with what it wrote, from
   `.ddtools-init.yaml`), and the template repo must match its output
   (CI checks this).
-- **Releases:** bump `__version__`, add a `CHANGELOG.md` section, merge, then tag
-  `vX.Y.Z`.
+- **Releases:** bump `__version__`, add a `CHANGELOG.md` section, merge, then run the
+  Release workflow (Actions → Release → Run workflow) or push the tag `vX.Y.Z`.
 - Never push to `master`: branch and open a PR.
 - British English; short sentences; tables over long paragraphs.
