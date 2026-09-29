@@ -1,9 +1,12 @@
 name: Release
 
-# Push a tag vX.Y.Z (matching ddtools.__version__) to publish a GitHub release.
+# Publishes the GitHub release for ddtools.__version__, with its CHANGELOG.md section.
+# Either push a tag vX.Y.Z, or press "Run workflow" (Actions → Release): that creates
+# the tag on the latest master for you.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   release:
@@ -16,11 +19,22 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14"
-      - name: The tag matches the package version
+      - name: Work out the tag
         run: |
           set -euo pipefail
           version=$(python -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('src/ddtools/__init__.py').read())[1])")
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME but __version__ is $version"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME but __version__ is $version"; exit 1; }
+          fi
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Not released already
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG is already released: bump __version__ first."; exit 1
+          fi
       - name: Build
         run: |
           pip install "$(grep '^build==' requirements-dev.txt)"
@@ -28,9 +42,9 @@ jobs:
       - name: Notes from CHANGELOG.md
         run: |
           # The section under "## <version>", up to the next "## ".
-          awk -v v="## ${GITHUB_REF_NAME#v}" '$0 ~ "^"v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
-          test -s notes.md || { echo "No CHANGELOG.md section for ${GITHUB_REF_NAME#v}"; exit 1; }
-      - name: Create the release
+          awk -v v="## $VERSION" '$0 ~ "^"v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "No CHANGELOG.md section for $VERSION"; exit 1; }
+      - name: Create the release (and the tag, if it isn't there yet)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "ddtools $GITHUB_REF_NAME" --notes-file notes.md
+        run: gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "ddtools $TAG" --notes-file notes.md
