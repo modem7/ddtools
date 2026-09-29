@@ -15,8 +15,9 @@ Every command and playbook: `ddtools --help`, and the `ddtools` README
 ## First session in a new copy of this repo ("set up this repo")
 
 1. `pip install -r requirements.txt`.
-2. `ddtools init . --owner <their GitHub name>`: it fills in the owner-specific files
-   and keeps everything that's already there. Open a PR with the result.
+2. `ddtools init . --owner <their GitHub name>` (add `--public` if their repo is public).
+   It makes the repo theirs: files still exactly as the template had them follow their
+   name, and anything edited is kept. Open a PR with the result.
 3. Ask for their character's name and campaign, then
    `ddtools new-character "<Name>" --new-campaign "<Campaign>"`.
 4. `ddtools workbook <dir>`: they fill it in (on screen or on paper).

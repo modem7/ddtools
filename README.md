@@ -75,7 +75,7 @@ Privacy).
 | `ddtools blueprints [name]` | Lists the blueprints, or prints one: what each document contains, and the rules learned so far. |
 | `ddtools retire <dir> --reason death\|tpk\|retired\|campaign-end [--note "…"]` | Marks the character retired and writes `RETIRED.md` (unrevealed secrets, open DM questions). Moves the folder to `archive/`. |
 | `ddtools list [--json]` | Lists active and archived characters. |
-| `ddtools init <dir> --owner NAME [--name --public --template --extends --funding HANDLE]` | Makes a folder a campaign repo (see below). Fills blanks only: it never overwrites a file, and lists what it left alone. |
+| `ddtools init <dir> --owner NAME [--name --public --template --extends --funding HANDLE]` | Makes a folder a campaign repo (see below). Safe to re-run: it never touches a file someone edited, and lists what it left alone. |
 
 ### `ddtools init`
 
@@ -89,6 +89,11 @@ It writes a campaign repo, filled in for its owner:
 | `.github/workflows/dndbeyond-watch.yml` | A daily `ddtools watch` that opens an issue when a sheet changes |
 | `.github/` | Settings, CODEOWNERS, issue and PR templates, auto-assign |
 | Others | `renovate.json`, `.editorconfig`, `.gitattributes`, `.gitignore`, `.claude/settings.json`, MIT licence, CONTRIBUTING |
+
+It records what it was run with in `.ddtools-init.yaml`. Run it again with other values
+(say, on your copy of the template repo) and it updates the files still exactly as it
+wrote them, removes ones no longer wanted (FUNDING without `--funding`), and keeps
+anything you edited.
 
 Options: `--public` (default private), `--template` (a GitHub template repository),
 `--extends` (`settings.yml` extends your `.github` repo), `--funding HANDLE` (a Buy Me a

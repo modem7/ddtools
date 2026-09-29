@@ -15,7 +15,8 @@
 - **D&D Beyond is read-only.**
 - **`ddtools.pdfstyle` values** set every campaign's look; a change there changes every
   PDF.
-- **`ddtools init` never overwrites** a file, and the template repo must match its output
+- **`ddtools init` never touches an edited file** (it compares with what it wrote, from
+  `.ddtools-init.yaml`), and the template repo must match its output
   (CI checks this).
 - **Releases:** bump `__version__`, add a `CHANGELOG.md` section, merge, then tag
   `vX.Y.Z`.

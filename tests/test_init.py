@@ -67,8 +67,54 @@ def test_rerunning_fills_blanks_and_keeps_everything(tmp_path, capsys):
     assert (repo / "README.md").read_text() == "My own readme\n"
     assert "Kept README.md" in out
     before = _all_text(repo)
-    assert main(["init", str(repo), "--owner", "someone-else"]) == 0
-    assert _all_text(repo) == before, "a second run changes nothing"
+    assert main(["init", str(repo), "--owner", "ash-vale"]) == 0
+    assert _all_text(repo) == before, "the same values again change nothing"
+
+
+def _template(tmp_path):
+    repo = tmp_path / "copy-of-template"
+    main(["init", str(repo), "--owner", "modem7", "--name", "dnd-campaign-template", "--public",
+          "--template", "--extends", "--funding", "modem7"])  # fmt: skip
+    return repo
+
+
+def test_init_records_what_it_was_run_with(tmp_path):
+    repo = _template(tmp_path)
+    marker = yaml.safe_load((repo / ".ddtools-init.yaml").read_text())
+    assert marker["owner"] == "modem7" and marker["name"] == "dnd-campaign-template"
+    assert marker["template"] is True and marker["funding"] == "modem7"
+
+
+def test_a_copied_template_becomes_the_friends(tmp_path, capsys):
+    repo = _template(tmp_path)
+    capsys.readouterr()
+    assert main(["init", str(repo), "--owner", "ash-vale", "--name", "my-campaign"]) == 0
+    out = capsys.readouterr().out
+    assert (repo / ".github/CODEOWNERS").read_text().strip() == "* @ash-vale"
+    settings = yaml.safe_load((repo / ".github/settings.yml").read_text())
+    assert settings["repository"]["name"] == "my-campaign"
+    assert "is_template" not in settings["repository"] and "_extends" not in settings
+    assert not (repo / ".github/FUNDING.yml").exists(), "no funding asked for: removed"
+    assert "config:recommended" in (repo / "renovate.json").read_text()
+    assert "Updated .github/CODEOWNERS" in out and "Removed .github/FUNDING.yml" in out
+    text = _all_text(repo)
+    assert "modem7" not in text.replace("github.com/modem7/ddtools", "").replace(
+        "github.com/modem7/dnd-campaign-template", ""), "nothing of modem7's left"  # fmt: skip
+    marker = yaml.safe_load((repo / ".ddtools-init.yaml").read_text())
+    assert marker["owner"] == "ash-vale" and marker["template"] is False
+
+
+def test_an_edited_file_is_never_replaced(tmp_path, capsys):
+    repo = _template(tmp_path)
+    readme = repo / "README.md"
+    readme.write_text(readme.read_text() + "\nOur table meets on Fridays.\n")
+    (repo / ".github/FUNDING.yml").write_text("buy_me_a_coffee: someone\n")
+    capsys.readouterr()
+    main(["init", str(repo), "--owner", "ash-vale", "--name", "my-campaign"])
+    out = capsys.readouterr().out
+    assert "Our table meets on Fridays." in readme.read_text()
+    assert (repo / ".github/FUNDING.yml").read_text() == "buy_me_a_coffee: someone\n"
+    assert "Kept README.md (edited)" in out and "Kept .github/FUNDING.yml (edited)" in out
 
 
 def test_a_new_repo_builds_a_character(tmp_path, monkeypatch):
