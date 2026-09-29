@@ -632,11 +632,17 @@ def _init_args(p: argparse.ArgumentParser) -> None:
 def cmd_init(args: argparse.Namespace) -> int:
     from ddtools.init import init_repo
 
-    created, kept = init_repo(args.dir, args.owner, args.name, public=args.public,
-                              template=args.template, extends=args.extends,
-                              funding=args.funding)  # fmt: skip
-    for rel in created:
+    done = init_repo(args.dir, args.owner, args.name, public=args.public,
+                     template=args.template, extends=args.extends,
+                     funding=args.funding)  # fmt: skip
+    for rel in done["created"]:
         print(f"Created {rel}")
-    for rel in kept:
+    for rel in done["updated"]:
+        print(f"Updated {rel}")
+    for rel in done["removed"]:
+        print(f"Removed {rel}")
+    for rel in done["kept"]:
         print(f"Kept {rel} (already there)")
+    for rel in done["edited"]:
+        print(f"Kept {rel} (edited)")
     return 0

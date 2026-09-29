@@ -13,7 +13,9 @@ The first public release.
   blanks in `character.yaml`. It never overwrites.
 - **New:** `ddtools blueprints` prints what each document contains, and the rules learned
   so far.
-- **New:** `ddtools init` makes a folder a campaign repo, filled in for its owner.
+- **New:** `ddtools init` makes a folder a campaign repo, filled in for its owner. Run on
+  a copy of the template repo, it makes the copy yours: files still exactly as the
+  template had them follow your name; anything edited is kept.
 - **New:** plugins. The `ddtools.plugins` entry-point group can add commands and
   D&D Beyond text blocks.
 - New characters get the party workbook, and the character template ships inside the
