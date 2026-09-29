@@ -1,0 +1,61 @@
+name: D&D Beyond watch
+
+# Daily: compare live D&D Beyond sheets with the committed snapshots and open (or
+# update) an issue when a character or a party member has changed, so an update
+# session can be started. It never commits or opens PRs: the update PR commits the
+# new snapshots and closes the issue.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    name: Check character sheets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install ddtools
+        run: pip install -r requirements.txt
+      - name: Compare sheets with committed snapshots
+        id: watch
+        run: |
+          set +e
+          ddtools watch --issue-dir "$RUNNER_TEMP/issues"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      # Changes found before an error are still raised, so one unreadable sheet can't
+      # hide another character's level-up; the job then fails on the error below.
+      - name: Open or update issues
+        if: steps.watch.outputs.code == '3' || steps.watch.outputs.code == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for file in "$RUNNER_TEMP"/issues/*.md; do
+            title=$(head -n 1 "$file")
+            tail -n +2 "$file" > "$RUNNER_TEMP/body.md"
+            number=$(gh issue list --repo "$GITHUB_REPOSITORY" --label dndbeyond-sync --state open \
+              --json number,title | jq -r --arg t "$title" '.[] | select(.title == $t) | .number' | head -n 1)
+            if [ -n "$number" ]; then
+              gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+              gh issue comment "$number" --repo "$GITHUB_REPOSITORY" \
+                --body "The sheet changed again on $(date -u +%F). The issue body shows the latest differences."
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+                --body-file "$RUNNER_TEMP/body.md" --label dndbeyond-sync
+            fi
+          done
+      - name: Fail on fetch errors
+        if: steps.watch.outputs.code == '1'
+        run: |
+          echo "::error::A sheet could not be read (see the log above): the character may no longer be Public, or D&D Beyond may be blocking requests from GitHub's servers."
+          exit 1

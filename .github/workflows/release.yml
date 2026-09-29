@@ -1,0 +1,36 @@
+name: Release
+
+# Push a tag vX.Y.Z (matching ddtools.__version__) to publish a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    name: GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: The tag matches the package version
+        run: |
+          set -euo pipefail
+          version=$(python -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('src/ddtools/__init__.py').read())[1])")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME but __version__ is $version"; exit 1; }
+      - name: Build
+        run: |
+          pip install "$(grep '^build==' requirements-dev.txt)"
+          python -m build
+      - name: Notes from CHANGELOG.md
+        run: |
+          # The section under "## <version>", up to the next "## ".
+          awk -v v="## ${GITHUB_REF_NAME#v}" '$0 ~ "^"v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "No CHANGELOG.md section for ${GITHUB_REF_NAME#v}"; exit 1; }
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "ddtools $GITHUB_REF_NAME" --notes-file notes.md

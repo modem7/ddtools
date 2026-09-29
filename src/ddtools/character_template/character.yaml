@@ -1,0 +1,27 @@
+# Filled in by `ddtools new-character`. `ddtools blueprints` says what each document holds.
+name: __NAME__
+status: active
+level: 1
+updated: __TODAY__
+dndbeyond_id: null        # the number in your D&D Beyond character URL (set it to Public)
+class_summary: ""         # e.g. Druid 3 (Circle of Spores)
+campaign: {}              # replaced with the campaign block
+documents:
+  - file: pdf/__SLUG___Guide.pdf
+    script: src/build_guide.py
+    audience: private
+  - file: pdf/__SLUG___Party_Handout.pdf
+    script: src/build_party_handout.py
+    audience: party
+    future_sections: [Coming Soon]
+  - file: pdf/__SLUG___DM_Brief.pdf
+    script: src/build_dm_brief.py
+    audience: dm
+  - file: pdf/Party_Character_Guide_Workbook.pdf
+    script: ddtools:workbook      # built by ddtools from the campaign (ddtools blueprints party-workbook)
+    audience: party
+    # Not spell mentions: the workbook's "Heal and protect" tick box. Add any spell names
+    # your campaign facts or party summaries use (e.g. a banned spell, a "Light" domain).
+    spell_ignore: [Heal]
+secrets_file: secrets.txt
+retired: null

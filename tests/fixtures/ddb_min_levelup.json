@@ -1,0 +1,220 @@
+{
+ "id": 999,
+ "name": "Fixture Hero",
+ "baseHitPoints": 15,
+ "stats": [
+  {
+   "id": 1,
+   "value": 8
+  },
+  {
+   "id": 2,
+   "value": 18
+  },
+  {
+   "id": 3,
+   "value": 13
+  },
+  {
+   "id": 4,
+   "value": 12
+  },
+  {
+   "id": 5,
+   "value": 13
+  },
+  {
+   "id": 6,
+   "value": 17
+  }
+ ],
+ "bonusStats": [
+  {
+   "id": 1,
+   "value": null
+  },
+  {
+   "id": 2,
+   "value": null
+  },
+  {
+   "id": 3,
+   "value": null
+  },
+  {
+   "id": 4,
+   "value": null
+  },
+  {
+   "id": 5,
+   "value": null
+  },
+  {
+   "id": 6,
+   "value": null
+  }
+ ],
+ "overrideStats": [
+  {
+   "id": 1,
+   "value": null
+  },
+  {
+   "id": 2,
+   "value": null
+  },
+  {
+   "id": 3,
+   "value": null
+  },
+  {
+   "id": 4,
+   "value": null
+  },
+  {
+   "id": 5,
+   "value": null
+  },
+  {
+   "id": 6,
+   "value": null
+  }
+ ],
+ "modifiers": {
+  "race": [
+   {
+    "type": "bonus",
+    "subType": "dexterity-score",
+    "value": 2
+   },
+   {
+    "type": "resistance",
+    "subType": "fire",
+    "value": null
+   }
+  ],
+  "class": [],
+  "background": null,
+  "item": [],
+  "feat": [],
+  "condition": []
+ },
+ "classes": [
+  {
+   "id": 11,
+   "level": 3,
+   "definition": {
+    "name": "Warlock"
+   },
+   "subclassDefinition": {
+    "name": "The Fiend"
+   }
+  },
+  {
+   "id": 22,
+   "level": 1,
+   "definition": {
+    "name": "Sorcerer"
+   },
+   "subclassDefinition": null
+  }
+ ],
+ "classSpells": [
+  {
+   "characterClassId": 11,
+   "spells": [
+    {
+     "definition": {
+      "name": "Eldritch Blast"
+     }
+    },
+    {
+     "definition": {
+      "name": "Scorching Ray"
+     }
+    }
+   ]
+  },
+  {
+   "characterClassId": 22,
+   "spells": []
+  }
+ ],
+ "spells": {
+  "race": [
+   {
+    "definition": {
+     "name": "Cure Wounds"
+    }
+   }
+  ],
+  "class": [],
+  "background": null,
+  "item": [
+   {
+    "definition": {
+     "name": "Call Lightning"
+    }
+   }
+  ],
+  "feat": null
+ },
+ "options": {
+  "race": [],
+  "class": [
+   {
+    "definition": {
+     "name": "Repelling Blast"
+    }
+   },
+   {
+    "definition": {
+     "name": "Agonizing Blast"
+    }
+   }
+  ],
+  "background": null,
+  "item": null,
+  "feat": []
+ },
+ "feats": [
+  {
+   "definition": {
+    "name": "Painful Joke"
+   }
+  }
+ ],
+ "inventory": [
+  {
+   "definition": {
+    "name": "Winged Boots",
+    "magic": true
+   },
+   "equipped": true,
+   "isAttuned": true,
+   "quantity": 1
+  },
+  {
+   "definition": {
+    "name": "Torch",
+    "magic": false
+   },
+   "equipped": false,
+   "isAttuned": false,
+   "quantity": 10
+  },
+  {
+   "definition": null,
+   "equipped": false,
+   "isAttuned": false,
+   "quantity": 1
+  }
+ ],
+ "currencies": {
+  "cp": 4,
+  "sp": 19,
+  "gp": 40,
+  "ep": 0,
+  "pp": 0
+ }
+}

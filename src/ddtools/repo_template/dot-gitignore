@@ -1,0 +1,145 @@
+# ========================
+# OS / System
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# ========================
+# Claude
+# ========================
+.claude/*
+!.claude/settings.json
+
+# ========================
+# Editor / IDE
+# ========================
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ========================
+# Secrets & Credentials
+# ========================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# ========================
+# Build Artifacts
+# ========================
+dist/
+build/
+out/
+target/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+
+# ========================
+# Logs & Temp
+# ========================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+*.patch
+
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ========================
+# Node / JS / TS
+# ========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.pnp.*
+coverage/
+
+# ========================
+# Go
+# ========================
+vendor/
+*.test
+
+# ========================
+# Rust
+# ========================
+# (target/ already covered above)
+Cargo.lock
+
+# ========================
+# Docker
+# ========================
+.dockerenv
+
+# ========================
+# Terraform
+# ========================
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# ========================
+# Ansible
+# ========================
+*.retry
+.vault_pass
+
+# ========================
+# Archives (usually don't belong in git)
+# ========================
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.rar
+*.7z

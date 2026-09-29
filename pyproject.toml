@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ddtools"
+dynamic = ["version"]
+description = "Tools for building and checking D&D character documents"
+requires-python = ">=3.12"
+readme = "README.md"
+license = "MIT"
+dependencies = ["pillow", "pypdf", "pypdfium2", "PyYAML", "reportlab"]
+
+[project.urls]
+Homepage = "https://github.com/modem7/ddtools"
+Template = "https://github.com/modem7/dnd-campaign-template"
+Changelog = "https://github.com/modem7/ddtools/blob/master/CHANGELOG.md"
+
+[project.scripts]
+ddtools = "ddtools.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "ddtools.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ddtools*"]
+
+[tool.setuptools.package-data]
+ddtools = ["data/*.txt", "blueprints/*.md", "repo_template/**/*", "character_template/**/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# The package tests import their helpers from conftest, here and in ddtools's own repo.
+known-local-folder = ["conftest"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/ddtools/character_template/**" = ["E501", "F403", "F405"]
+# Long prose, like the build scripts.
+"src/ddtools/workbook.py" = ["E501", "F403", "F405"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

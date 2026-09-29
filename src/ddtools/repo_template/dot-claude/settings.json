@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ddtools *)",
+      "Bash(python3 -m ddtools *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "WebFetch(domain:character-service.dndbeyond.com)",
+      "WebFetch(domain:www.dndbeyond.com)"
+    ]
+  }
+}

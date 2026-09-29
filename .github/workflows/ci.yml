@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Cancel superseded runs on the same branch/PR rather than letting them pile up
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  syntax-check:
+    name: Python syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Compile every .py file
+        run: python -m compileall -q .
+
+  lint:
+    name: Ruff lint
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install ruff
+        run: pip install "$(grep '^ruff==' requirements-dev.txt)"
+      - name: Run ruff check
+        run: ruff check .
+      - name: Run ruff format --check
+        run: ruff format --check .
+
+  test:
+    name: pytest (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run test suite
+        # Tests use made-up characters and tests/fixtures; nothing here calls D&D Beyond.
+        run: pytest -v
+
+  wheel:
+    name: Wheel builds and installs
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+      - name: Build the wheel and sdist
+        run: |
+          pip install "$(grep '^build==' requirements-dev.txt)"
+          python -m build
+      - name: Install the wheel, scaffold a campaign, build and check a character
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install dist/*.whl
+          cd "$RUNNER_TEMP"
+          venv/bin/ddtools --version
+          venv/bin/ddtools init campaign --owner example
+          venv/bin/ddtools blueprints
+          cd campaign
+          ../venv/bin/ddtools new-character "Test Hero" --new-campaign "Test"
+          # A sheet from the test fixtures stands in for `ddtools fetch`.
+          cp "$GITHUB_WORKSPACE/tests/fixtures/ddb_min.json" Test_Hero/snapshots/2026-01-01.json
+          ../venv/bin/ddtools build Test_Hero
+          ../venv/bin/ddtools check Test_Hero
+
+  template-matches-init:
+    name: Template repo matches ddtools init
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: modem7/dnd-campaign-template
+          path: template
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Compare
+        # The ddtools pin is left to Renovate, so it is ignored here.
+        run: |
+          set -euo pipefail
+          pip install -e .
+          ddtools init "$RUNNER_TEMP/expected" --owner modem7 --name dnd-campaign-template \
+            --public --template --extends --funding modem7
+          for d in template "$RUNNER_TEMP/expected"; do
+            sed -i -E 's/ddtools\.git@v[0-9.]+/ddtools.git@vX/' "$d/requirements.txt"
+          done
+          diff -r --exclude=.git "$RUNNER_TEMP/expected" template
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    # Account default workflow token permission is read-only with no
+    # pull-requests scope; gitleaks-action needs pull-requests:read to list
+    # commits on a PR event.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE only required for GitHub Organizations, not personal accounts

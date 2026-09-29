@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Cancel superseded runs on the same branch/PR rather than letting them pile up
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  syntax-check:
+    name: Python syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Compile every .py file
+        run: python -m compileall -q .
+
+  build-and-check:
+    name: Build and check characters
+    runs-on: ubuntu-latest
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+      - name: Install ddtools
+        run: pip install -r requirements.txt
+      - name: Build, check and compare every active character
+        # The spell check uses the committed snapshots; nothing here calls D&D Beyond.
+        run: |
+          set -euo pipefail
+          for dir in $(ddtools list --json | jq -r '.[] | select(.status == "active") | .dir'); do
+            echo "::group::$dir"
+            ddtools build "$dir" --out "$RUNNER_TEMP/pdf/$dir"
+            ddtools check "$dir" --pdf-dir "$RUNNER_TEMP/pdf/$dir"
+            ddtools golden check "$dir"
+            echo "::endgroup::"
+          done
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    # Account default workflow token permission is read-only with no
+    # pull-requests scope; gitleaks-action needs pull-requests:read to list
+    # commits on a PR event.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE only required for GitHub Organizations, not personal accounts
