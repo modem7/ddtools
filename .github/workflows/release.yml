@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.0.0
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - name: Work out the tag
         run: |
           set -euo pipefail
