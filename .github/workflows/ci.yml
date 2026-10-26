@@ -115,7 +115,10 @@ jobs:
           for d in template "$RUNNER_TEMP/expected"; do
             sed -i -E 's/ddtools\.git@v[0-9.]+/ddtools.git@vX/' "$d/requirements.txt"
           done
-          diff -r --exclude=.git "$RUNNER_TEMP/expected" template
+          # The template repo also carries README screenshots (docs/ and a
+          # "What it makes" section) that init doesn't write.
+          sed -i '/^## What it makes$/,/^## /{/^## What it makes$/d;/^## /!d}' template/README.md
+          diff -r --exclude=.git --exclude=docs "$RUNNER_TEMP/expected" template
 
   secret-scan:
     name: Secret scan
