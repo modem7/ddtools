@@ -3,6 +3,10 @@
 Styles, colours and helpers are copied exactly from the original build
 scripts: the golden tests depend on them producing identical pages. Change
 them only together with a reviewed ``ddtools golden update``.
+
+The DejaVu fonts are bundled in ``ddtools/fonts``. Set ``DDTOOLS_FONT_DIR`` to load
+them from another folder; if it is set and a file is missing, import raises
+``FontsMissing``.
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ __all__ = [
     "FontsMissing",
 ]  # fmt: skip
 
-DEFAULT_FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
+_BUNDLED_FONT_DIR = Path(__file__).parent / "fonts"
 _FONTS = {
     "DV": "DejaVuSans.ttf",
     "DVB": "DejaVuSans-Bold.ttf",
@@ -50,16 +54,23 @@ _FONTS = {
 
 
 class FontsMissing(RuntimeError):
-    """The DejaVu fonts the documents are designed around are not installed."""
+    """The DejaVu fonts the documents are designed around cannot be found."""
 
 
 def _register_fonts() -> None:
-    font_dir = Path(os.environ.get("DDTOOLS_FONT_DIR", DEFAULT_FONT_DIR))
+    """Register the DejaVu fonts.
+
+    They ship with the package (``ddtools/fonts``). Set ``DDTOOLS_FONT_DIR`` to use
+    another folder instead; it must then hold all five files.
+    """
+    override = os.environ.get("DDTOOLS_FONT_DIR")
+    font_dir = Path(override) if override else _BUNDLED_FONT_DIR
     missing = [f for f in _FONTS.values() if not (font_dir / f).is_file()]
     if missing:
+        source = "DDTOOLS_FONT_DIR" if override else "the bundled font folder"
         raise FontsMissing(
             f"DejaVu fonts not found in {font_dir} (missing {', '.join(missing)}). "
-            "Install fonts-dejavu-core or set DDTOOLS_FONT_DIR."
+            f"Check {source}, or unset DDTOOLS_FONT_DIR to use the bundled fonts."
         )
     for name, file in _FONTS.items():
         pdfmetrics.registerFont(TTFont(name, str(font_dir / file)))

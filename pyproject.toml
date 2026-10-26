@@ -27,7 +27,7 @@ where = ["src"]
 include = ["ddtools*"]
 
 [tool.setuptools.package-data]
-ddtools = ["data/*.txt", "blueprints/*.md", "repo_template/**/*", "character_template/**/*"]
+ddtools = ["data/*.txt", "blueprints/*.md", "repo_template/**/*", "character_template/**/*", "fonts/*"]
 
 [tool.ruff]
 line-length = 100
