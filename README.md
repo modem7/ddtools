@@ -33,8 +33,11 @@ and the DM brief (bottom row) are from a made-up sample character.
 ## Build and check
 
 <p align="center">
-  <img src="docs/images/build-check.png" alt="ddtools build and check running in a terminal" width="80%">
+  <img src="docs/images/build-check.png" alt="ddtools build, then check passing, then check catching a leaked secret and a spell the character doesn't have yet" width="80%">
 </p>
+
+`check` reads the character's D&D Beyond sheet. In the second run, someone has written a
+secret and a spell that isn't on the sheet into the party handout, and `check` flags both.
 
 ## Install
 
