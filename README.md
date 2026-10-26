@@ -17,9 +17,8 @@ Build and check D&D character documents from a D&D Beyond sheet.
 
 ## What it makes
 
-The party workbook is a fillable PDF each player fills in. These pages are from a
-brand-new character, so the other documents are still blank starters, with a prompt
-saying what goes in each section.
+The party workbook is a fillable PDF each player fills in (top row). The party handout
+and the DM brief (bottom row) are from a made-up sample character.
 
 <p align="center">
   <img src="docs/images/workbook-overview.png" alt="Workbook cover page with a three-step guide and progress tracker" width="45%">
