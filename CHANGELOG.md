@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Changed:** the DejaVu fonts now come with the package, so `fonts-dejavu-core` no
+  longer needs installing. `DDTOOLS_FONT_DIR` still overrides them.
+
 ## 0.2.0
 
 The first public release.

@@ -41,7 +41,7 @@ secret and a spell that isn't on the sheet into the party handout, and `check` f
 
 ## Install
 
-Python 3.12 or later, and DejaVu fonts (`sudo apt-get install fonts-dejavu-core`).
+Python 3.12 or later. The DejaVu fonts the documents use come with the package.
 
 ```bash
 pip install "ddtools @ git+https://github.com/modem7/ddtools.git@v0.2.0"

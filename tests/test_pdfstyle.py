@@ -29,6 +29,18 @@ def test_missing_fonts(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError) as exc:
         importlib.reload(ps)
     assert type(exc.value).__name__ == "FontsMissing"
-    assert "fonts-dejavu-core" in str(exc.value)
+    assert "DDTOOLS_FONT_DIR" in str(exc.value)
     monkeypatch.delenv("DDTOOLS_FONT_DIR")
     importlib.reload(ps)
+
+
+def test_bundled_fonts(monkeypatch):
+    import ddtools.pdfstyle as ps
+
+    monkeypatch.delenv("DDTOOLS_FONT_DIR", raising=False)
+    importlib.reload(ps)
+    for file in ps._FONTS.values():
+        assert (ps._BUNDLED_FONT_DIR / file).is_file()
+    for name, file in ps._FONTS.items():
+        # the font registry is global, so check the file came from the bundled folder
+        assert ps.pdfmetrics.getFont(name).face.filename == str(ps._BUNDLED_FONT_DIR / file)
