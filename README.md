@@ -15,6 +15,27 @@ Build and check D&D character documents from a D&D Beyond sheet.
   [dnd-campaign-template](https://github.com/modem7/dnd-campaign-template). Its README
   walks you through it, with or without Claude.
 
+## What it makes
+
+The party workbook is a fillable PDF each player fills in (top row). The party handout
+and the DM brief (bottom row) are from a made-up sample character.
+
+<p align="center">
+  <img src="docs/images/workbook-overview.png" alt="Workbook cover page with a three-step guide and progress tracker" width="45%">
+  <img src="docs/images/workbook-form.png" alt="Workbook form page with tick boxes and fill-in fields" width="45%">
+</p>
+
+<p align="center">
+  <img src="docs/images/party-handout.png" alt="Starter party handout with a prompt under each heading" width="45%">
+  <img src="docs/images/dm-brief.png" alt="Starter DM brief" width="45%">
+</p>
+
+## Build and check
+
+<p align="center">
+  <img src="docs/images/build-check.png" alt="ddtools build and check running in a terminal" width="80%">
+</p>
+
 ## Install
 
 Python 3.12 or later, and DejaVu fonts (`sudo apt-get install fonts-dejavu-core`).
