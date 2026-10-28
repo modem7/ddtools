@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import re
 import textwrap
+from collections.abc import Iterable, Sequence
+from pathlib import Path
 
-from ddtools.config import date_stamp, load_character, output_path, present
+from ddtools.config import Character, is_present, load_character, output_path, updated_label
 from ddtools.pdfstyle import *  # noqa: F403
 
 FILE = "Party_Character_Guide_Workbook.pdf"
@@ -29,11 +31,11 @@ def field_key(label: str) -> str:
     return f"{VERSION}.s{_section[0]}.{slug}"
 
 
-def field(label, lines=3):
+def field(label: str, lines: int = 3) -> Field:
     return Field(label, lines, key=field_key(label))  # noqa: F405
 
 
-def ticks(options, cols=3, **kw):
+def ticks(options: Sequence[str], cols: int = 3, **kw: float) -> Ticks:
     return Ticks(options, cols, key=field_key(options[0]), **kw)  # noqa: F405
 
 
@@ -45,11 +47,13 @@ EX_BG = colors.HexColor("#f5f0ea")
 EX_EDGE = MUTED
 
 
-def example(t):
+def example(t: str) -> Table:
     return box([P("<b>Example (Mossy):</b> " + t, small)], bg=EX_BG, edge=EX_EDGE)
 
 
-def section(num, name, mins, why, skip=None):
+def section(
+    num: int, name: str, mins: int | str, why: str, skip: str | None = None
+) -> list[Flowable]:
     _section[0] = num
     TITLES[num] = name
     out = [CondPageBreak(70 * mm), P(f"{num}. {name}", h1)]
@@ -61,18 +65,18 @@ def section(num, name, mins, why, skip=None):
     return out
 
 
-def prompts(items):
+def prompts(items: Iterable[str]) -> list[Paragraph]:
     return bl(items)
 
 
-def story(CH) -> list:
+def story(CH: Character) -> list[Flowable]:
     """The workbook's flowables, for a character."""
-    PARTY = [p for p in CH.campaign.get("party") or [] if present(CH, p["name"])]
+    PARTY = [p for p in CH.campaign.get("party") or [] if is_present(CH, p["name"])]
     WB = CH.campaign.get("workbook") or {}
     FIRST = CH.name.split(" ")[0]
     LINKS = NUMBERS[1 + len(PARTY)] if 1 + len(PARTY) < len(NUMBERS) else str(1 + len(PARTY))
     _section[0] = 0
-    S = []
+    S: list[Flowable] = []
 
     # ---------------- Cover ----------------
     S.append(P("Your Character Guide", title))
@@ -835,11 +839,11 @@ def story(CH) -> list:
     return S
 
 
-def build_workbook(ch=None):
+def build_workbook(ch: Character | None = None) -> Path:
     """Write the workbook PDF for ``ch`` (default: the character being built)."""
     ch = ch or load_character()
     out = output_path(ch, FILE)
-    build(story(ch), out, f"Your Character Guide — Workbook · {date_stamp(ch)}")  # noqa: F405
+    build(story(ch), out, f"Your Character Guide — Workbook · {updated_label(ch)}")  # noqa: F405
     return out
 
 

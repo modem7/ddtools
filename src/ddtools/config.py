@@ -6,23 +6,41 @@ Build scripts call ``load_character()`` with no argument: ``ddtools build`` sets
 
 from __future__ import annotations
 
+import copy
 import os
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict, cast, get_args
 
 import yaml
 
 from ddtools.errors import DdtoolsError
 
+# A path argument: a Path or a plain string. Path-taking functions put what they act on
+# first and any destination last: ``build_character(char_dir, out)``,
+# ``import_workbook(pdf, char_dir)``.
+type PathLike = str | os.PathLike[str]
+
+Status = Literal["active", "retired"]
 AUDIENCES = ("private", "party", "dm")
-STATUSES = ("active", "retired")
+STATUSES: tuple[Status, ...] = get_args(Status)
 FILENAME = "character.yaml"
+BUILTIN_PREFIX = "ddtools:"  # a document script ddtools ships, e.g. ``ddtools:workbook``
 
 
 class ConfigError(DdtoolsError):
     """character.yaml is missing or invalid. The message names the file and field."""
+
+
+class Retirement(TypedDict):
+    """``retired:`` in character.yaml, as ``ddtools retire`` writes it."""
+
+    date: date
+    reason: str
+    note: str
 
 
 @dataclass
@@ -33,12 +51,41 @@ class Document:
     future_sections: list[str] = field(default_factory=list)
     spell_ignore: list[str] = field(default_factory=list)
 
-    def source(self, char_dir: Path) -> Path:
-        """The build script's source file: ``ddtools:<name>`` is ddtools' own module."""
-        if self.script.startswith("ddtools:"):
+    @property
+    def module_name(self) -> str | None:
+        """``ddtools.<name>`` for a ``ddtools:<name>`` script; None for the repo's own."""
+        if self.script.startswith(BUILTIN_PREFIX):
+            return f"ddtools.{self.script.removeprefix(BUILTIN_PREFIX)}"
+        return None
+
+    @property
+    def is_builtin(self) -> bool:
+        """True for a document ddtools builds itself (``ddtools:<name>``)."""
+        return self.module_name is not None
+
+    def command(self, char_dir: PathLike) -> tuple[Path, list[str], Path]:
+        """How ``ddtools build`` runs the script: ``(script, argv, cwd)``.
+
+        ``script`` names it in errors. ddtools' own module runs with ``python -m`` from
+        the character folder; a repo script runs from its own folder.
+        """
+        module = self.module_name
+        if module is not None:
+            return Path(self.script), [sys.executable, "-m", module], Path(char_dir)
+        script = Path(char_dir) / self.script
+        return script, [sys.executable, str(script)], script.parent
+
+    def source(self, char_dir: PathLike) -> Path:
+        """The build script's source file: ``ddtools:<name>`` is ddtools' own module.
+
+        Raises:
+            ConfigError: a ``ddtools:<name>`` script names no ddtools module.
+        """
+        module = self.module_name
+        if module is not None:
             import importlib.util
 
-            spec = importlib.util.find_spec(f"ddtools.{self.script.split(':', 1)[1]}")
+            spec = importlib.util.find_spec(module)
             if spec is None or spec.origin is None:
                 raise ConfigError(f"{self.script}: ddtools has no such document")
             return Path(spec.origin)
@@ -49,7 +96,7 @@ class Document:
 class Character:
     dir: Path
     name: str
-    status: str
+    status: Status
     level: int
     updated: date
     dndbeyond_id: int | None
@@ -57,7 +104,7 @@ class Character:
     campaign: dict[str, Any]
     documents: list[Document]
     secrets_file: str = "secrets.txt"
-    retired: dict | None = None
+    retired: Retirement | None = None
     # Top-level keys ddtools doesn't know (e.g. a plugin's), kept as they are on save.
     extra: dict[str, Any] = field(default_factory=dict)
     party_summary: str = ""  # one line the party knows (the workbook's own row)
@@ -67,7 +114,7 @@ class Character:
         return self.dir / self.secrets_file
 
 
-def _require(data: dict, key: str, kind: type, where: Path):
+def _require[T](data: dict, key: str, kind: type[T], where: Path) -> T:
     if key not in data or data[key] is None:
         raise ConfigError(f"{where}: missing required field '{key}'")
     if not isinstance(data[key], kind):
@@ -81,8 +128,8 @@ KNOWN_KEYS = {
 }  # fmt: skip
 
 
-def load_character(dir: Path | str | None = None) -> Character:
-    """Load and validate ``<dir>/character.yaml`` (default: ``$DDTOOLS_CHARACTER_DIR``).
+def load_character(char_dir: PathLike | None = None) -> Character:
+    """Load and validate ``<char_dir>/character.yaml`` (default: ``$DDTOOLS_CHARACTER_DIR``).
 
     Every ``campaign.party`` entry must be a mapping with a ``name``. ``dndbeyond_id`` is
     optional here; the commands that fetch a member report it if it's missing.
@@ -90,12 +137,12 @@ def load_character(dir: Path | str | None = None) -> Character:
     Raises:
         ConfigError: the file is missing or invalid; the message names the file and field.
     """
-    if dir is None:
+    if char_dir is None:
         env = os.environ.get("DDTOOLS_CHARACTER_DIR")
         if not env:
             raise ConfigError("No character folder given and DDTOOLS_CHARACTER_DIR is not set")
-        dir = env
-    base = Path(dir).resolve()
+        char_dir = env
+    base = Path(char_dir).resolve()
     path = base / FILENAME
     if not path.is_file():
         raise ConfigError(f"{path}: not found")
@@ -136,7 +183,7 @@ def load_character(dir: Path | str | None = None) -> Character:
     return Character(
         dir=base,
         name=name,
-        status=status,
+        status=cast(Status, status),
         level=level,
         updated=updated,
         dndbeyond_id=data.get("dndbeyond_id"),
@@ -177,21 +224,35 @@ def _day(d: date) -> str:
     return f"{d.day} {d.strftime('%b %Y')}"
 
 
-def stamp(ch: Character) -> str:
-    """Footer stamp, e.g. ``Level 3 · updated 28 Sep 2026``."""
+def level_updated_label(ch: Character) -> str:
+    """Footer label with level and date, e.g. ``Level 3 · updated 28 Sep 2026``."""
     return f"Level {ch.level} · updated {_day(ch.updated)}"
 
 
-def date_stamp(ch: Character) -> str:
-    """Date-only stamp, e.g. ``updated 28 Sep 2026``."""
+def updated_label(ch: Character) -> str:
+    """Footer label with the date only, e.g. ``updated 28 Sep 2026``."""
     return f"updated {_day(ch.updated)}"
 
 
+def output_dir(ch: Character) -> Path:
+    """The folder build scripts write to: ``$DDTOOLS_OUT`` or ``<char_dir>/pdf``. Pure."""
+    return Path(os.environ.get("DDTOOLS_OUT") or ch.dir / "pdf")
+
+
 def output_path(ch: Character, filename: str) -> Path:
-    """Where a build script writes ``filename``: ``$DDTOOLS_OUT`` or ``<dir>/pdf``."""
-    out = Path(os.environ.get("DDTOOLS_OUT") or ch.dir / "pdf")
+    """Where a build script writes ``filename``, in ``output_dir(ch)``.
+
+    Not pure: it creates that folder (with parents) if it's missing, so a script can
+    write straight to the path it gets.
+    """
+    out = output_dir(ch)
     out.mkdir(parents=True, exist_ok=True)
     return out / filename
+
+
+# Old names, kept: every campaign's copied build scripts import them.
+stamp = level_updated_label
+date_stamp = updated_label
 
 
 def rules_rows(ch: Character, audience: str | None = None) -> list[list[str]]:
@@ -212,7 +273,7 @@ def rules_rows(ch: Character, audience: str | None = None) -> list[list[str]]:
     return rows
 
 
-def character_dirs(root: Path | str = ".", include_archive: bool = False) -> list[Path]:
+def character_dirs(root: PathLike = ".", include_archive: bool = False) -> list[Path]:
     """Character folders (containing character.yaml) directly under ``root``."""
     root = Path(root)
     found = sorted(p.parent for p in root.glob(f"*/{FILENAME}"))
@@ -267,37 +328,59 @@ def _set_field(lines: list[str], block: tuple[int, int], key: str, value) -> Non
     lines.insert(last, new)
 
 
-def _write_party(ch_dir: Path, mutate) -> None:
-    """Apply ``mutate(party)`` to character.yaml's party list, editing only the lines it needs.
+# One party-list change: ("set", name, fields) on a member, or ("add", name, fields).
+type PartyEdit = tuple[Literal["set", "add"], str, dict[str, Any]]
 
-    Falls back to rewriting the whole file only if the list isn't in the usual block style.
-    The result is always re-read and checked against what ``mutate`` asked for.
+
+def _apply_edits(party: list[dict], edits: list[PartyEdit]) -> None:
+    """Make ``edits`` to the parsed party list: what the file must hold afterwards."""
+    for kind, name, fields in edits:
+        if kind == "set":
+            next(p for p in party if p.get("name") == name).update(fields)
+        else:
+            party.append({"name": name, **fields})
+
+
+def _block_span(lines: list[str]) -> tuple[int, int]:
+    span = _party_span(lines)
+    if span is None:
+        raise LookupError
+    return span
+
+
+def _write_party(char_dir: PathLike, plan: Callable[[list[dict]], list[PartyEdit]]) -> None:
+    """Make the edits ``plan(party)`` returns to character.yaml's party list, editing only
+    the lines they need.
+
+    ``plan`` gets a copy of the current party list to read; it returns edits and changes
+    nothing itself. The file must then match the edits applied to the parsed list. If
+    the list isn't in the usual block style, or the line edits don't give that result,
+    the whole file is rewritten from the parsed data instead (losing its comments).
     """
-    path = Path(ch_dir) / FILENAME
+    path = Path(char_dir) / FILENAME
     text = path.read_text(encoding="utf-8")
     data = yaml.safe_load(text)
     expected = yaml.safe_load(text)
     party = expected.setdefault("campaign", {}).setdefault("party", [])
-    edits = mutate(party)
+    edits = plan(copy.deepcopy(party))
+    _apply_edits(party, edits)
     lines = text.split("\n")
-    span = _party_span(lines)
     try:
-        if span is None:
-            raise LookupError
+        span = _block_span(lines)
         for kind, name, fields in edits:
             if kind == "set":
                 block = _member_span(lines, span, name)
-                if block is None:
-                    raise LookupError
                 for key, value in fields.items():
+                    if block is None:
+                        raise LookupError
                     _set_field(lines, block, key, value)
-                    block = _member_span(lines, _party_span(lines), name)
+                    block = _member_span(lines, _block_span(lines), name)
             else:
-                at = _party_span(lines)[1]
+                at = _block_span(lines)[1]
                 entry = [_yaml_line("name", name, 4).replace("    name:", "    - name:", 1)]
                 entry += [_yaml_line(k, v, 6) for k, v in fields.items()]
                 lines[at:at] = entry
-            span = _party_span(lines)
+            span = _block_span(lines)
         new_text = "\n".join(lines)
         if yaml.safe_load(new_text) != expected:
             raise LookupError
@@ -307,29 +390,31 @@ def _write_party(ch_dir: Path, mutate) -> None:
         path.write_text(new_text, encoding="utf-8")
 
 
-def set_party_fields(ch_dir: Path, name: str, fields: dict) -> None:
-    """Set fields on one party member (matched by ``name``)."""
+def set_party_fields(char_dir: PathLike, name: str, fields: dict) -> None:
+    """Set fields on one party member (matched by ``name``).
 
-    def mutate(party):
+    Raises:
+        ConfigError: no party member is called ``name``.
+    """
+
+    def plan(party: list[dict]) -> list[PartyEdit]:
         member = next((p for p in party if p.get("name") == name), None)
         if member is None:
             raise ConfigError(f"{name} isn't in {FILENAME}'s party list")
         changed = {k: v for k, v in fields.items() if member.get(k) != v}
-        member.update(changed)
         return [("set", name, changed)] if changed else []
 
-    _write_party(ch_dir, mutate)
+    _write_party(char_dir, plan)
 
 
-def add_party_member(ch_dir: Path, entry: dict) -> None:
+def add_party_member(char_dir: PathLike, entry: dict) -> None:
     """Append a member (``entry`` has ``name`` first) to the party list."""
 
-    def mutate(party):
-        party.append(dict(entry))
+    def plan(party: list[dict]) -> list[PartyEdit]:
         fields = {k: v for k, v in entry.items() if k != "name"}
         return [("add", entry["name"], fields)]
 
-    _write_party(ch_dir, mutate)
+    _write_party(char_dir, plan)
 
 
 # ---- who is in the party (for the documents) ------------------------------------------
@@ -345,10 +430,13 @@ def party_member(ch: Character, name: str) -> dict | None:
     return None
 
 
-def present(ch: Character, name: str) -> bool:
+def is_present(ch: Character, name: str) -> bool:
     """True if ``name`` is still in the party: on the list and not gone for good."""
     p = party_member(ch, name)
     return p is not None and p.get("status", "active") != "gone"
+
+
+present = is_present  # old name, kept for campaigns' own build scripts
 
 
 def absent_friends(ch: Character) -> list[dict]:
@@ -365,13 +453,13 @@ def newcomers(ch: Character, known: list[str]) -> list[dict]:
     ]
 
 
-def set_top_level(ch_dir: Path, key: str, value) -> None:
+def set_top_level(char_dir: PathLike, key: str, value: Any) -> None:
     """Set one top-level scalar in ``character.yaml``, keeping every comment and line.
 
     Replaces the ``key:`` line (keeping a trailing comment) or adds it at the end; then
     checks the file still loads.
     """
-    path = Path(ch_dir) / FILENAME
+    path = Path(char_dir) / FILENAME
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
     new = _yaml_line(key, value, 0).rstrip("\n")
     for i, line in enumerate(lines):
@@ -384,7 +472,7 @@ def set_top_level(ch_dir: Path, key: str, value) -> None:
     before = path.read_text(encoding="utf-8")
     path.write_text("".join(lines), encoding="utf-8")
     try:
-        load_character(ch_dir)
+        load_character(char_dir)
     except ConfigError:
         path.write_text(before, encoding="utf-8")
         raise

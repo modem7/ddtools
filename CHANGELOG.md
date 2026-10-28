@@ -10,6 +10,22 @@
   character folder, a bad snapshot or baseline file, a party member with no name or
   `dndbeyond_id`, or a missing workbook PDF now gives a message naming the file, not a
   traceback.
+- **Changed:** clearer names in `ddtools.config` for build scripts. The old names still
+  work, so existing build scripts need no change.
+
+  | Old | New |
+  |---|---|
+  | `stamp(ch)` | `level_updated_label(ch)` |
+  | `date_stamp(ch)` | `updated_label(ch)` |
+  | `present(ch, name)` | `is_present(ch, name)` |
+
+- **New:** `ddtools.config.output_dir(ch)` gives the output folder without creating it.
+  `output_path` still creates it.
+- **Changed:** parameters called `dir` or `ch_dir` are now `char_dir`. This only matters
+  if you pass them by keyword: `load_character`, `build_character`, `retire`,
+  `import_workbook`, `set_top_level`, `set_party_fields`, `add_party_member` and
+  `sheettext.load_source`.
+- **Changed:** `ddtools.sheettext.status` is now `field_status`.
 
 ## 0.2.0
 

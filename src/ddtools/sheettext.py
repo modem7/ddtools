@@ -1,6 +1,6 @@
 """Paste-ready text for a character's D&D Beyond description and notes fields.
 
-The source is ``<dir>/dndbeyond.yaml``. Allies are generated (one line per party member
+The source is ``<char_dir>/dndbeyond.yaml``. Allies are generated (one line per party member
 still in the party, in party order), and any ``{{name}}`` is filled by a plugin that
 provides it. The result is compared with the latest snapshot and checked against
 ``secrets.txt``: a D&D Beyond sheet can be read by the party.
@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict
 
 import yaml
 
-from ddtools.checks import find_spoilers, load_secrets
+from ddtools.checks import Secret, find_spoilers, load_secrets
 from ddtools.errors import DdtoolsError
+
+if TYPE_CHECKING:
+    from ddtools.config import Character, PathLike
 
 SOURCE_FILE = "dndbeyond.yaml"
 OUTPUT_FILE = "notes/dndbeyond-text.md"
@@ -50,14 +55,36 @@ class SheetTextError(DdtoolsError):
     pass
 
 
-def load_source(dir: Path | str) -> dict:
-    path = Path(dir) / SOURCE_FILE
+class FieldReport(TypedDict):
+    """One D&D Beyond field in a ``report``."""
+
+    section: str
+    key: str
+    label: str
+    proposed: str | None
+    live: object
+    status: str
+    blanks: list[str]
+    live_secrets: list[str]
+
+
+class SheetTextReport(TypedDict):
+    """What ``report`` returns: every field, plus what needs fixing."""
+
+    fields: list[FieldReport]
+    problems: list[str]
+    missing_allies: list[str]
+    snapshot: str | None
+
+
+def load_source(char_dir: PathLike) -> dict:
+    path = Path(char_dir) / SOURCE_FILE
     if not path.is_file():
         raise SheetTextError(f"{path}: not found (see tools/README.md, “D&D Beyond text”)")
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def party_names(ch) -> list[str]:
+def party_names(ch: Character) -> list[str]:
     """Party members still in the party, in order."""
     party = ch.campaign.get("party") or []
     return [m["name"] for m in party if m.get("status", "active") != "gone"]
@@ -70,14 +97,15 @@ def allies_text(src: dict, names: list[str]) -> tuple[str, list[str]]:
     return text, [n for n in names if n not in lines]
 
 
-def _norm(value) -> str:
+def _norm(value: object) -> str:
     text = "" if value is None else str(value)
     for a, b in (("’", "'"), ("‘", "'"), ("“", '"'), ("”", '"'), ("–", "-"), ("—", "-")):
         text = text.replace(a, b)
     return re.sub(r"\s+", " ", text).strip()
 
 
-def status(proposed, live) -> str:
+def field_status(proposed: str | None, live: object) -> str:
+    """How the proposed text compares with the live sheet's (quotes and spaces ignored)."""
     if proposed is None:
         return "leave as is"
     if not _norm(live):
@@ -98,7 +126,7 @@ def live_fields(data: dict) -> dict[str, object]:
     return out
 
 
-def _latest_snapshot(ch) -> tuple[str | None, dict]:
+def _latest_snapshot(ch: Character) -> tuple[str | None, dict]:
     from ddtools import dndbeyond as ddb
 
     snaps = ddb.latest_snapshots(ch, 1)
@@ -107,7 +135,7 @@ def _latest_snapshot(ch) -> tuple[str | None, dict]:
     return snaps[-1].name, json.loads(snaps[-1].read_text(encoding="utf-8"))
 
 
-def _terms(text: str, secrets) -> list[str]:
+def _terms(text: str, secrets: list[Secret]) -> list[str]:
     return sorted({h["term"] for h in find_spoilers([text], secrets)}) if text else []
 
 
@@ -115,7 +143,7 @@ def _terms(text: str, secrets) -> list[str]:
 BLOCK = re.compile(r"\{\{(\w+)\}\}")
 
 
-def _block_filler(ch, names: list[str]):
+def _block_filler(ch: Character, names: list[str]) -> Callable[[str], tuple[str, list[str]]]:
     """A function that fills every {{name}} in a text: (filled text, what went wrong)."""
     from ddtools import plugins
 
@@ -124,9 +152,9 @@ def _block_filler(ch, names: list[str]):
     made: dict[str, str] = {}
 
     def fill(text: str) -> tuple[str, list[str]]:
-        problems = []
+        problems: list[str] = []
 
-        def one(m):
+        def one(m: re.Match[str]) -> str:
             name = m.group(1)
             if name not in providers:
                 problems.append(f"nothing fills {{{{{name}}}}}")
@@ -144,7 +172,7 @@ def _block_filler(ch, names: list[str]):
     return fill
 
 
-def report(ch) -> dict:
+def report(ch: Character) -> SheetTextReport:
     """Every field: proposed text, live text, status, blanks and secrets; plus problems."""
     src = load_source(ch.dir)
     names = party_names(ch)
@@ -153,7 +181,8 @@ def report(ch) -> dict:
     secrets = load_secrets(ch.secrets_path) if ch.secrets_path.is_file() else []
     snapshot, data = _latest_snapshot(ch)
     live = live_fields(data) if data else {}
-    fields, problems = [], []
+    fields: list[FieldReport] = []
+    problems: list[str] = []
     for section, key, label in FIELDS:
         given = src.get(section) or {}
         if key == "allies":
@@ -167,7 +196,7 @@ def report(ch) -> dict:
             proposed, failed = fill(proposed)
             problems += [f"{key}: {why}" for why in failed]
         if key == "allies" or key in given:
-            state = status(proposed, live.get(key)) if data else "no snapshot"
+            state = field_status(proposed, live.get(key)) if data else "no snapshot"
         else:
             state = "not in the source"
         if section == "details" and proposed and len(proposed) > DETAIL_LIMIT:
@@ -183,7 +212,7 @@ def report(ch) -> dict:
             "snapshot": snapshot}  # fmt: skip
 
 
-def render(ch, rep: dict) -> str:
+def render(ch: Character, rep: SheetTextReport) -> str:
     """The paste-ready file: what to change first, then every field's text."""
     out = [
         f"# {ch.name}: D&D Beyond text",
@@ -229,7 +258,7 @@ def render(ch, rep: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def write(ch, rep: dict) -> Path:
+def write(ch: Character, rep: SheetTextReport) -> Path:
     path = ch.dir / OUTPUT_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render(ch, rep), encoding="utf-8")

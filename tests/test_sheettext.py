@@ -41,13 +41,14 @@ def test_party_names_skip_teammates_who_are_gone(ash):
     assert T.party_names(ch) == ["Cinder"]
 
 
-def test_status_compares_loosely_and_leaves_what_the_source_leaves():
-    assert T.status("It’s a “deal”.\nTwo lines", 'It\'s a "deal".\r\nTwo  lines') == "up to date"
-    assert T.status("38", 38) == "up to date"
-    assert T.status("New text", "") == "missing"
-    assert T.status("New text", None) == "missing"
-    assert T.status("New text", "Old text") == "needs updating"
-    assert T.status(None, "38") == "leave as is"
+def test_field_status_compares_loosely_and_leaves_what_the_source_leaves():
+    same = T.field_status("It’s a “deal”.\nTwo lines", 'It\'s a "deal".\r\nTwo  lines')
+    assert same == "up to date"
+    assert T.field_status("38", 38) == "up to date"
+    assert T.field_status("New text", "") == "missing"
+    assert T.field_status("New text", None) == "missing"
+    assert T.field_status("New text", "Old text") == "needs updating"
+    assert T.field_status(None, "38") == "leave as is"
 
 
 def test_blanks_are_found():

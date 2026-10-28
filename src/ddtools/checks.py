@@ -6,10 +6,14 @@ import re
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict
 
 from ddtools.dndbeyond import latest_snapshots, load_snapshot, summarise
-from ddtools.golden import headings_from_script, locate_headings
+from ddtools.golden import Heading, headings_from_script, locate_headings
 from ddtools.textdump import page_texts
+
+if TYPE_CHECKING:
+    from ddtools.config import Character, PathLike
 
 _QUOTES = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "­": None})
 _LEVEL_LABEL = re.compile(r"\blevels?\s*\d+\+?|\bat level\b", re.IGNORECASE)
@@ -22,12 +26,28 @@ class Secret:
     exact: bool
 
 
+class SpoilerHit(TypedDict):
+    """A secret found in a document."""
+
+    page: int
+    term: str
+    context: str  # the text around it, ±40 characters
+
+
+class FutureSpellHit(TypedDict):
+    """A spell named as if current, but not on the sheet."""
+
+    page: int
+    spell: str
+    sentence: str
+
+
 def clean(text: str) -> str:
     """Straighten quotes, drop soft hyphens and collapse whitespace."""
     return re.sub(r"\s+", " ", text.translate(_QUOTES)).strip()
 
 
-def load_secrets(path: Path) -> list[Secret]:
+def load_secrets(path: PathLike) -> list[Secret]:
     """One entry per line; ``#`` comments and blanks ignored; ``"quoted"`` = exact match."""
     secrets = []
     for line in Path(path).read_text(encoding="utf-8").splitlines():
@@ -48,7 +68,8 @@ def _pattern(secret: Secret) -> re.Pattern:
 
 def _flatten(pages: list[str], sep: str = " ") -> tuple[str, list[int]]:
     """All pages cleaned and joined with ``sep``, plus each page's start offset."""
-    starts, flat = [], ""
+    starts: list[int] = []
+    flat = ""
     for page in pages:
         starts.append(len(flat))
         flat += clean(page) + sep
@@ -59,14 +80,14 @@ def _page_of(offset: int, starts: list[int]) -> int:
     return max(i for i, start in enumerate(starts) if start <= offset) + 1
 
 
-def find_spoilers(pages: list[str], secrets: list[Secret]) -> list[dict]:
+def find_spoilers(pages: list[str], secrets: list[Secret]) -> list[SpoilerHit]:
     """Every occurrence of a secret: ``{page, term, context}`` (context is ±40 characters).
 
     Pages are scanned as one text, so a secret split across a page break is still found
     (reported on the page where it starts).
     """
     flat, starts = _flatten(pages)
-    hits = []
+    hits: list[SpoilerHit] = []
     for secret in secrets:
         for m in _pattern(secret).finditer(flat):
             ctx = flat[max(0, m.start() - 40) : m.end() + 40].strip()
@@ -85,13 +106,16 @@ def snapshot_spell_names(data: dict) -> set[str]:
     return {clean(n) for names in summarise(data)["spells"].values() for n in names}
 
 
-def _future_ranges(flat: str, page_starts: list[int], headings: list[dict], future: list[str]):
+def _future_ranges(
+    flat: str, page_starts: list[int], headings: list[Heading], future: list[str]
+) -> list[tuple[int, int]]:
     """Character ranges of ``flat`` that sit under a heading listed in ``future``."""
     located = []
     for h in headings:
-        if h.get("page") is None:
+        page = h.get("page")
+        if page is None:
             continue
-        pos = flat.find(clean(h["text"]), page_starts[h["page"] - 1])
+        pos = flat.find(clean(h["text"]), page_starts[page - 1])
         if pos != -1:
             located.append((pos, clean(h["text"])))
     located.sort()
@@ -108,10 +132,10 @@ def find_future_spells(
     pages: list[str],
     known: set[str],
     sheet: set[str],
-    headings: list[dict],
+    headings: list[Heading],
     future_sections: list[str],
     ignore: list[str],
-) -> list[dict]:
+) -> list[FutureSpellHit]:
     """Spells named as if current that aren't on the sheet: ``{page, spell, sentence}``.
 
     Allowed: the sentence has a level label ("at level 4", "(level 8+)"), or the
@@ -124,7 +148,7 @@ def find_future_spells(
     spell_re = re.compile(r"(?<![\w'-])(" + "|".join(map(re.escape, candidates)) + r")(?![\w'-])")
     flat, page_starts = _flatten(pages, "\n")
     future = _future_ranges(flat, page_starts, headings, future_sections)
-    hits = []
+    hits: list[FutureSpellHit] = []
     for m in spell_re.finditer(flat):
         if any(a <= m.start() < b for a, b in future):
             continue
@@ -140,10 +164,10 @@ def find_future_spells(
     return hits
 
 
-def run_checks(ch, pdf_dir: Path | None = None) -> list[str]:
+def run_checks(ch: Character, pdf_dir: PathLike | None = None) -> list[str]:
     """All problems in a character's party documents, as readable lines (empty = clean).
 
-    ``pdf_dir`` checks PDFs built elsewhere (e.g. CI's fresh build) instead of ``<dir>/pdf``.
+    ``pdf_dir`` checks PDFs built elsewhere (e.g. CI's fresh build) instead of ``<char_dir>/pdf``.
 
     Raises:
         SnapshotError: the latest snapshot can't be read.
@@ -170,11 +194,11 @@ def run_checks(ch, pdf_dir: Path | None = None) -> list[str]:
             problems.append(f"{doc.file}: spell check skipped, no snapshot (run `ddtools fetch`)")
             continue
         headings = locate_headings(pages, headings_from_script(doc.source(ch.dir)))
-        for hit in find_future_spells(
+        for spell in find_future_spells(
             pages, known, sheet, headings, doc.future_sections, doc.spell_ignore
         ):
             problems.append(
-                f"{doc.file} p{hit['page']}: '{hit['spell']}' isn't on the sheet and has no "
-                f"level label: “{hit['sentence']}”"
+                f"{doc.file} p{spell['page']}: '{spell['spell']}' isn't on the sheet and has no "
+                f"level label: “{spell['sentence']}”"
             )
     return problems
