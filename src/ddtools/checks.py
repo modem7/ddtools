@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
-from ddtools.dndbeyond import latest_snapshots, summarise
+from ddtools.dndbeyond import latest_snapshots, load_snapshot, summarise
 from ddtools.golden import headings_from_script, locate_headings
 from ddtools.textdump import page_texts
 
@@ -145,13 +144,15 @@ def run_checks(ch, pdf_dir: Path | None = None) -> list[str]:
     """All problems in a character's party documents, as readable lines (empty = clean).
 
     ``pdf_dir`` checks PDFs built elsewhere (e.g. CI's fresh build) instead of ``<dir>/pdf``.
+
+    Raises:
+        SnapshotError: the latest snapshot can't be read.
+        ConfigError: a document's ``ddtools:`` script doesn't exist.
     """
     problems = []
     secrets = load_secrets(ch.secrets_path) if ch.secrets_path.exists() else []
     snaps = latest_snapshots(ch, 1)
-    sheet = (
-        snapshot_spell_names(json.loads(snaps[-1].read_text(encoding="utf-8"))) if snaps else None
-    )
+    sheet = snapshot_spell_names(load_snapshot(snaps[-1])) if snaps else None
     known = load_spell_names()
     for doc in ch.documents:
         if doc.audience != "party":

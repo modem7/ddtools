@@ -4,6 +4,12 @@
 
 - **Changed:** the DejaVu fonts now come with the package, so `fonts-dejavu-core` no
   longer needs installing. `DDTOOLS_FONT_DIR` still overrides them.
+- **Changed:** `retire` and `import-workbook` are all or nothing. If a write or the move
+  fails, `character.yaml`, `RETIRED.md` and the answers file go back to how they were.
+- **Changed:** ddtools' errors share one base, `ddtools.errors.DdtoolsError`. A missing
+  character folder, a bad snapshot or baseline file, a party member with no name or
+  `dndbeyond_id`, or a missing workbook PDF now gives a message naming the file, not a
+  traceback.
 
 ## 0.2.0
 

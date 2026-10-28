@@ -14,22 +14,32 @@ import re
 from datetime import date
 from pathlib import Path
 
-from ddtools.config import load_character, set_top_level
+from ddtools.config import FILENAME, load_character, set_top_level
 from ddtools.dndbeyond import parse_id
+from ddtools.errors import DdtoolsError
 
 ANSWERS = "notes/sources/workbook-answers.md"
 _NAME = re.compile(r"^v1\.s(\d+)\.")
 
 
-class NotAWorkbook(Exception):
-    pass
+class NotAWorkbook(DdtoolsError):
+    """The file isn't there, isn't a PDF, or isn't a ddtools workbook."""
 
 
 def read_fields(pdf: Path) -> list[dict]:
-    """The workbook's fields in order: ``{name, section, label, kind, value}``."""
+    """The workbook's fields in order: ``{name, section, label, kind, value}``.
+
+    Raises:
+        NotAWorkbook: ``pdf`` is missing, unreadable or has no v1 workbook fields.
+    """
     import pypdf
 
-    fields = pypdf.PdfReader(str(pdf)).get_fields() or {}
+    if not Path(pdf).is_file():
+        raise NotAWorkbook(f"{pdf}: not found")
+    try:
+        fields = pypdf.PdfReader(str(pdf)).get_fields() or {}
+    except pypdf.errors.PyPdfError as err:
+        raise NotAWorkbook(f"{pdf}: can't read it as a PDF ({err})") from err
     out = []
     for name, f in fields.items():
         m = _NAME.match(name)
@@ -78,7 +88,17 @@ def _answer(fields, prefix: str) -> str:
 
 def import_workbook(pdf: Path, dir: Path) -> dict:
     """Import ``pdf`` into the character at ``dir``. Returns what was written, filled,
-    left alone (differences) and what's still blank."""
+    left alone (differences) and what's still blank.
+
+    All or nothing: everything is read and worked out first. If writing the answers file
+    or ``character.yaml`` then fails, both go back to how they were and the error is
+    raised.
+
+    Raises:
+        NotAWorkbook: ``pdf`` is missing, unreadable or not a ddtools workbook.
+        ConfigError: ``dir`` isn't a valid character folder.
+        OSError: a write failed (after the rollback).
+    """
     ch = load_character(dir)
     fields = read_fields(pdf)
     target = ch.dir / ANSWERS
@@ -88,10 +108,9 @@ def import_workbook(pdf: Path, dir: Path) -> dict:
         while target.exists():
             target = target.with_name(f"workbook-answers-{date.today().isoformat()}-{n}.md")
             n += 1
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(answers_markdown(ch, fields, Path(pdf).name), encoding="utf-8")
+    answers = answers_markdown(ch, fields, Path(pdf).name)
 
-    filled, differences = [], []
+    sets, filled, differences = [], [], []
     name = _answer(fields, "v1.s1.character-name")
     if name and name != ch.name:
         differences.append(f"name: the workbook says '{name}', character.yaml says '{ch.name}'")
@@ -103,7 +122,7 @@ def import_workbook(pdf: Path, dir: Path) -> dict:
             differences.append(f"D&D Beyond link: can't read an id from '{link}'")
         else:
             if ch.dndbeyond_id is None:
-                set_top_level(ch.dir, "dndbeyond_id", ddb)
+                sets.append(("dndbeyond_id", ddb))
                 filled.append(f"dndbeyond_id: {ddb}")
             elif ch.dndbeyond_id != ddb:
                 differences.append(f"dndbeyond_id: the workbook says {ddb}, "
@@ -111,10 +130,22 @@ def import_workbook(pdf: Path, dir: Path) -> dict:
     summary = _answer(fields, "v1.s1.race-class-subclass-level")
     if summary:
         if not ch.class_summary:
-            set_top_level(ch.dir, "class_summary", summary)
+            sets.append(("class_summary", summary))
             filled.append(f"class_summary: {summary}")
         elif ch.class_summary != summary:
             differences.append(f"class_summary: the workbook says '{summary}', "
                                f"character.yaml says '{ch.class_summary}'")  # fmt: skip
     blank = [f["label"] for f in fields if f["kind"] == "text" and not f["value"]]
+
+    cfg = ch.dir / FILENAME
+    old_cfg = cfg.read_bytes()
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(answers, encoding="utf-8")
+        for key, value in sets:
+            set_top_level(ch.dir, key, value)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        cfg.write_bytes(old_cfg)
+        raise
     return {"answers": target, "filled": filled, "differences": differences, "blank": blank}

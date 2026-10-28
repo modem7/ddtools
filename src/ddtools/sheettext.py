@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 from ddtools.checks import find_spoilers, load_secrets
+from ddtools.errors import DdtoolsError
 
 SOURCE_FILE = "dndbeyond.yaml"
 OUTPUT_FILE = "notes/dndbeyond-text.md"
@@ -45,7 +46,7 @@ FIELDS: list[tuple[str, str, str]] = [
 SECTION_TITLES = {"details": "Character Details", "traits": "Traits", "notes": "Notes"}
 
 
-class SheetTextError(Exception):
+class SheetTextError(DdtoolsError):
     pass
 
 

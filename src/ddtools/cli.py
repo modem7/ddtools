@@ -103,9 +103,14 @@ def cmd_golden(args: argparse.Namespace) -> int:
 
     from ddtools.build import BuildError, build_character
     from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
     from ddtools.golden import capture
 
-    ch = load_character(args.dir)
+    try:
+        ch = load_character(args.dir)
+    except DdtoolsError as err:
+        print(err)
+        return 1
     dest = Path.cwd() / "tests" / "golden" / ch.dir.name
     if args.action == "check":
         return _golden_check(ch, dest)
@@ -170,7 +175,7 @@ def _build_args(p: argparse.ArgumentParser) -> None:
 @command("build", "Build a character's PDFs (and .txt copies) from its scripts.", _build_args)
 def cmd_build(args: argparse.Namespace) -> int:
     from ddtools.build import BuildError, build_character
-    from ddtools.config import ConfigError
+    from ddtools.errors import DdtoolsError
     from ddtools.preview import page_count
 
     try:
@@ -179,7 +184,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     except BuildError as err:
         print(f"Build failed in {err.script}:\n{err.stderr}")
         return 1
-    except ConfigError as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     return 0
@@ -219,6 +224,7 @@ def _print_json(data) -> None:
 def cmd_fetch(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
 
     try:
         if _is_dir(args.target):
@@ -229,7 +235,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             print(ddb.save_snapshot(ch, ddb.fetch_character(ch.dndbeyond_id)))
         else:
             _print_json(ddb.fetch_character(ddb.parse_id(args.target)))
-    except (ddb.DndBeyondError, ValueError) as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     return 0
@@ -256,10 +262,9 @@ def _format_summary(s: dict) -> str:
 
 @command("summary", "Summarise a sheet: level, stats, spells by source, items, gold.", _target_args)
 def cmd_summary(args: argparse.Namespace) -> int:
-    import json
-
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
 
     try:
         if _is_dir(args.target):
@@ -267,10 +272,10 @@ def cmd_summary(args: argparse.Namespace) -> int:
             if not snaps:
                 print(f"No snapshots yet: run `ddtools fetch {args.target}` first.")
                 return 1
-            data = json.loads(snaps[-1].read_text(encoding="utf-8"))
+            data = ddb.load_snapshot(snaps[-1])
         else:
             data = ddb.fetch_character(ddb.parse_id(args.target))
-    except (ddb.DndBeyondError, ValueError) as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     s = ddb.summarise(data)
@@ -282,12 +287,20 @@ def cmd_summary(args: argparse.Namespace) -> int:
 def cmd_party(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
 
-    ch = load_character(args.dir)
+    try:
+        ch = load_character(args.dir)
+    except DdtoolsError as err:
+        print(err)
+        return 1
+    members = [p for p in ch.campaign.get("party") or [] if p.get("status") != "gone"]
+    no_id = [p["name"] for p in members if not p.get("dndbeyond_id")]
+    if no_id:
+        print(f"{ch.dir / 'character.yaml'}: no dndbeyond_id for {', '.join(no_id)}")
+        return 1
     rows = []
-    for member in ch.campaign.get("party") or []:
-        if member.get("status") == "gone":
-            continue
+    for member in members:
         try:
             rows.append(ddb.party_entry(ddb.fetch_character(member["dndbeyond_id"])))
         except ddb.DndBeyondError as err:
@@ -336,17 +349,21 @@ def _diff_args(p: argparse.ArgumentParser) -> None:
     "diff", "What changed between the two latest snapshots (+ level-up checklist).", _diff_args
 )
 def cmd_diff(args: argparse.Namespace) -> int:
-    import json
     from pathlib import Path
 
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
 
-    files = [Path(f) for f in args.files] or ddb.latest_snapshots(load_character(args.dir))
-    if len(files) < 2:
-        print(f"Need two snapshots to compare: run `ddtools fetch {args.dir}` first.")
+    try:
+        files = [Path(f) for f in args.files] or ddb.latest_snapshots(load_character(args.dir))
+        if len(files) < 2:
+            print(f"Need two snapshots to compare: run `ddtools fetch {args.dir}` first.")
+            return 1
+        old, new = (ddb.load_snapshot(f) for f in files[-2:])
+    except DdtoolsError as err:
+        print(err)
         return 1
-    old, new = (json.loads(f.read_text(encoding="utf-8")) for f in files[-2:])
     d = ddb.diff(old, new)
     if args.json:
         _print_json(d)
@@ -377,8 +394,13 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
     from ddtools import dndbeyond as ddb
     from ddtools.config import character_dirs, load_character
+    from ddtools.errors import DdtoolsError
 
-    chars = [load_character(d) for d in (args.dirs or character_dirs(Path.cwd()))]
+    try:
+        chars = [load_character(d) for d in (args.dirs or character_dirs(Path.cwd()))]
+    except DdtoolsError as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
     chars = [c for c in chars if c.status == "active"]
     results = [ddb.watch_character(c) for c in chars]
     errors = [e for r in results for e in r["errors"]]
@@ -414,11 +436,12 @@ def _check_args(p: argparse.ArgumentParser) -> None:
 )
 def cmd_check(args: argparse.Namespace) -> int:
     from ddtools.checks import run_checks
-    from ddtools.config import ConfigError, load_character
+    from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
 
     try:
         problems = run_checks(load_character(args.dir), pdf_dir=args.pdf_dir)
-    except ConfigError as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     for p in problems:
@@ -442,7 +465,7 @@ def _new_args(p: argparse.ArgumentParser) -> None:
 def cmd_new_character(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from ddtools.config import ConfigError
+    from ddtools.errors import DdtoolsError
     from ddtools.lifecycle import new_character
 
     try:
@@ -452,7 +475,7 @@ def cmd_new_character(args: argparse.Namespace) -> int:
             campaign_from=Path(args.campaign_from) if args.campaign_from else None,
             new_campaign=args.new_campaign,
         )
-    except (FileExistsError, ValueError, ConfigError) as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     print(f"Created {d}. Next: set dndbeyond_id in {d.name}/character.yaml, then `ddtools fetch`.")
@@ -471,11 +494,12 @@ def _retire_args(p: argparse.ArgumentParser) -> None:
 def cmd_retire(args: argparse.Namespace) -> int:
     from pathlib import Path
 
+    from ddtools.errors import DdtoolsError
     from ddtools.lifecycle import retire
 
     try:
         dest = retire(Path(args.dir), args.reason, args.note, Path.cwd())
-    except (FileExistsError, ValueError) as err:
+    except (DdtoolsError, OSError) as err:  # OSError: a failed write or move, rolled back
         print(err)
         return 1
     print(f"Retired to {dest}. Read {dest / 'RETIRED.md'} for threads to carry forward.")
@@ -490,9 +514,15 @@ def cmd_retire(args: argparse.Namespace) -> int:
 def cmd_list(args: argparse.Namespace) -> int:
     from pathlib import Path
 
+    from ddtools.errors import DdtoolsError
     from ddtools.lifecycle import list_characters
 
     root = Path.cwd()
+    try:
+        chars = list_characters(root)
+    except DdtoolsError as err:
+        print(err)
+        return 1
     rows = [
         {
             "name": c.name,
@@ -501,7 +531,7 @@ def cmd_list(args: argparse.Namespace) -> int:
             "campaign": c.campaign.get("name", ""),
             "status": c.status,
         }
-        for c in list_characters(root)
+        for c in chars
     ]
     if args.json:
         _print_json(rows)
@@ -522,12 +552,13 @@ def _sheet_text_args(p: argparse.ArgumentParser) -> None:
 )
 def cmd_sheet_text(args: argparse.Namespace) -> int:
     from ddtools import sheettext as T
-    from ddtools.config import ConfigError, load_character
+    from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
 
     try:
         ch = load_character(args.dir)
         rep = T.report(ch)
-    except (T.SheetTextError, ConfigError) as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     if rep["problems"]:
@@ -550,13 +581,14 @@ def _workbook_args(p: argparse.ArgumentParser) -> None:
 
 @command("workbook", "Build the party workbook (a fillable PDF) from the campaign.", _workbook_args)
 def cmd_workbook(args: argparse.Namespace) -> int:
-    from ddtools.config import ConfigError, load_character
+    from ddtools.config import load_character
+    from ddtools.errors import DdtoolsError
     from ddtools.textdump import write_text_copy
     from ddtools.workbook import build_workbook
 
     try:
         ch = load_character(args.dir)
-    except ConfigError as err:
+    except DdtoolsError as err:
         print(err)
         return 1
     out = build_workbook(ch)
@@ -578,12 +610,12 @@ def _import_workbook_args(p: argparse.ArgumentParser) -> None:
 def cmd_import_workbook(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from ddtools.config import ConfigError
-    from ddtools.workbook_import import NotAWorkbook, import_workbook
+    from ddtools.errors import DdtoolsError
+    from ddtools.workbook_import import import_workbook
 
     try:
         got = import_workbook(Path(args.pdf), Path(args.dir))
-    except (NotAWorkbook, ConfigError, OSError) as err:
+    except (DdtoolsError, OSError) as err:  # OSError: a failed write, already rolled back
         print(err)
         return 1
     print(f"Wrote {got['answers']}")

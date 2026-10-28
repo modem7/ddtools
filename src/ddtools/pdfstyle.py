@@ -33,6 +33,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from ddtools.errors import DdtoolsError
+
 __all__ = [
     "A4", "mm", "colors", "ParagraphStyle", "Paragraph", "Spacer", "Table", "TableStyle",
     "PageBreak", "KeepTogether", "CondPageBreak", "Preformatted", "Flowable",
@@ -53,7 +55,7 @@ _FONTS = {
 }
 
 
-class FontsMissing(RuntimeError):
+class FontsMissing(DdtoolsError, RuntimeError):
     """The DejaVu fonts the documents are designed around cannot be found."""
 
 

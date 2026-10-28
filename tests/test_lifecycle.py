@@ -131,3 +131,75 @@ def test_new_character_failure_leaves_no_folder(repo, monkeypatch):
     with pytest.raises(RuntimeError):
         new_character("Mossy", repo, new_campaign="C")
     assert not (repo / "Mossy").exists()
+
+
+def _state(d):
+    notes = d / "RETIRED.md"
+    return (d / "character.yaml").read_bytes(), notes.read_bytes() if notes.exists() else None
+
+
+@pytest.mark.parametrize("where", ["save", "note", "rename", "copy"])
+def test_retire_failure_leaves_character_as_it_was(repo, monkeypatch, where):
+    import errno
+
+    import ddtools.lifecycle as lc
+
+    ash = repo / "Ash_Vale"
+    before = _state(ash)
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    def half_copy(src, dst, **k):
+        (dst / "partial").mkdir(parents=True)
+        raise OSError("disk full")
+
+    if where == "save":
+        monkeypatch.setattr(lc, "save_character", boom)
+    elif where == "note":
+        monkeypatch.setattr(lc, "_retired_note", lambda *a: "note\n")
+        real_write = lc.Path.write_text
+        monkeypatch.setattr(lc.Path, "write_text", lambda self, *a, **k: (
+            boom() if self.name == "RETIRED.md" else real_write(self, *a, **k)))  # fmt: skip
+    elif where == "rename":
+        monkeypatch.setattr(lc.os, "rename", boom)
+    else:  # another filesystem: the copy fails part-way
+        monkeypatch.setattr(lc.os, "rename", lambda *a: (_ for _ in ()).throw(
+            OSError(errno.EXDEV, "cross-device link")))  # fmt: skip
+        monkeypatch.setattr(lc.shutil, "copytree", half_copy)
+    with pytest.raises(OSError):
+        retire(ash, "death", "", repo)
+    assert _state(ash) == before
+    assert load_character(ash).status == "active"
+    assert not (repo / "archive" / "Ash_Vale").exists()
+
+
+def test_retire_failure_keeps_an_existing_retired_note(repo, monkeypatch):
+    import ddtools.lifecycle as lc
+
+    ash = repo / "Ash_Vale"
+    (ash / "RETIRED.md").write_text("my own notes\n", encoding="utf-8")
+    monkeypatch.setattr(lc.os, "rename", lambda *a: (_ for _ in ()).throw(OSError("busy")))
+    with pytest.raises(OSError):
+        retire(ash, "death", "", repo)
+    assert (ash / "RETIRED.md").read_text(encoding="utf-8") == "my own notes\n"
+
+
+def test_retire_across_filesystems(repo, monkeypatch):
+    import errno
+
+    import ddtools.lifecycle as lc
+
+    monkeypatch.setattr(lc.os, "rename", lambda *a: (_ for _ in ()).throw(
+        OSError(errno.EXDEV, "cross-device link")))  # fmt: skip
+    dest = retire(repo / "Ash_Vale", "death", "", repo)
+    assert not (repo / "Ash_Vale").exists() and load_character(dest).status == "retired"
+
+
+def test_lifecycle_errors_are_ddtools_errors(repo):
+    from ddtools.errors import DdtoolsError
+
+    with pytest.raises(DdtoolsError):
+        retire(repo / "Ash_Vale", "bored", "", repo)
+    with pytest.raises(DdtoolsError):
+        new_character("Ash Vale", repo, new_campaign="C")
