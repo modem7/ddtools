@@ -36,7 +36,9 @@ def load_secrets(path: Path) -> list[Secret]:
         if not line or line.startswith("#"):
             continue
         exact = len(line) > 1 and line[0] == line[-1] == '"'
-        secrets.append(Secret(clean(line[1:-1] if exact else line), exact))
+        text = clean(line[1:-1] if exact else line)
+        if text:  # '""' alone would match everywhere
+            secrets.append(Secret(text, exact))
     return secrets
 
 
@@ -45,12 +47,12 @@ def _pattern(secret: Secret) -> re.Pattern:
     return re.compile(rf"(?<!\w){words}(?!\w)", 0 if secret.exact else re.IGNORECASE)
 
 
-def _flatten(pages: list[str]) -> tuple[str, list[int]]:
-    """All pages cleaned and joined with a space, plus each page's start offset."""
+def _flatten(pages: list[str], sep: str = " ") -> tuple[str, list[int]]:
+    """All pages cleaned and joined with ``sep``, plus each page's start offset."""
     starts, flat = [], ""
     for page in pages:
         starts.append(len(flat))
-        flat += clean(page) + " "
+        flat += clean(page) + sep
     return flat, starts
 
 
@@ -121,11 +123,7 @@ def find_future_spells(
     if not candidates:
         return []
     spell_re = re.compile(r"(?<![\w'-])(" + "|".join(map(re.escape, candidates)) + r")(?![\w'-])")
-    flat_pages = [clean(p) for p in pages]
-    page_starts, flat = [], ""
-    for p in flat_pages:
-        page_starts.append(len(flat))
-        flat += p + "\n"
+    flat, page_starts = _flatten(pages, "\n")
     future = _future_ranges(flat, page_starts, headings, future_sections)
     hits = []
     for m in spell_re.finditer(flat):
@@ -137,8 +135,9 @@ def find_future_spells(
         sentence = flat[start : after.start() if after else len(flat)].strip()
         if _LEVEL_LABEL.search(sentence):
             continue
-        page = max(i for i, s in enumerate(page_starts) if s <= m.start()) + 1
-        hits.append({"page": page, "spell": m.group(1), "sentence": sentence})
+        hits.append(
+            {"page": _page_of(m.start(), page_starts), "spell": m.group(1), "sentence": sentence}
+        )
     return hits
 
 
