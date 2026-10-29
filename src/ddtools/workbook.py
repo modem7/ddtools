@@ -11,32 +11,25 @@ Run as a document script: ``script: ddtools:workbook`` in ``character.yaml``.
 
 from __future__ import annotations
 
-import re
 import textwrap
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from ddtools.config import Character, is_present, load_character, output_path, updated_label
 from ddtools.pdfstyle import *  # noqa: F403
+from ddtools.workbook_fields import field_key
 
 FILE = "Party_Character_Guide_Workbook.pdf"
-VERSION = "v1"
 _section = [0]
 TITLES: dict[int, str] = {0: "Start"}  # section number -> title, filled as the story is built
 
 
-def field_key(label: str) -> str:
-    """The stable name of a write-in field: its section and its label, as a slug."""
-    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:48].rstrip("-")
-    return f"{VERSION}.s{_section[0]}.{slug}"
-
-
 def field(label: str, lines: int = 3) -> Field:
-    return Field(label, lines, key=field_key(label))  # noqa: F405
+    return Field(label, lines, key=field_key(_section[0], label))  # noqa: F405
 
 
 def ticks(options: Sequence[str], cols: int = 3, **kw: float) -> Ticks:
-    return Ticks(options, cols, key=field_key(options[0]), **kw)  # noqa: F405
+    return Ticks(options, cols, key=field_key(_section[0], options[0]), **kw)  # noqa: F405
 
 
 NUMBERS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
