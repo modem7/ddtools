@@ -26,6 +26,16 @@
   `import_workbook`, `set_top_level`, `set_party_fields`, `add_party_member` and
   `sheettext.load_source`.
 - **Changed:** `ddtools.sheettext.status` is now `field_status`.
+- **Fixed:** a plugin command named like a built-in one (say `build`) no longer stops
+  every command with an argparse error. It is skipped with a warning, as is a name an
+  earlier plugin already took. The first one wins, and the rest of the plugin loads.
+  Before, a clash between two plugins was skipped without a word.
+- **New:** `ddtools.registry` holds the command list. `Registry` has `register`,
+  `unregister`, `lookup` and `reset`; `COMMANDS` is the one `ddtools` uses.
+  `ddtools.cli.command` still works, and `ddtools.cli.unregister` removes a command.
+  Registering a taken name directly raises `DuplicateCommandError`.
+- **Changed:** `ddtools.plugins` no longer imports `ddtools.cli`. The private
+  `ddtools.cli._COMMANDS` list is gone; use `ddtools.registry.COMMANDS`.
 
 ## 0.2.0
 
