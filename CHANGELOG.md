@@ -9,7 +9,8 @@
 - **Changed:** ddtools' errors share one base, `ddtools.errors.DdtoolsError`. A missing
   character folder, a bad snapshot or baseline file, a party member with no name or
   `dndbeyond_id`, or a missing workbook PDF now gives a message naming the file, not a
-  traceback.
+  traceback. A party member's `name` must be text: write `name: "1984"` (or `"No"`) in
+  quotes, or `load_character` reports which `campaign.party` entry is wrong.
 
 ## 0.2.0
 
