@@ -108,7 +108,7 @@ def init_repo(dest: Path | str, owner: str, name: str | None = None, *, public: 
             else:
                 target.write_text(text, encoding="utf-8")
                 done["updated"].append(rel)
-        elif text is not None or rel in before:
+        else:  # changed by hand: edited if init wrote it before, kept if it was already there
             done["edited" if rel in before else "kept"].append(rel)
     (dest / MARKER).write_text(yaml.safe_dump(opts, sort_keys=False), encoding="utf-8")
     return done

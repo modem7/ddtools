@@ -67,6 +67,14 @@ def test_retire(repo):
     assert "smuggler" in note and "salt guild" in note
 
 
+def test_retire_note_skips_indented_comments(repo):
+    (repo / "Ash_Vale" / "secrets.txt").write_text(
+        "  # an indented comment\nsmuggler\n", encoding="utf-8"
+    )
+    note = (retire(repo / "Ash_Vale", "death", "", repo) / "RETIRED.md").read_text()
+    assert "smuggler" in note and "indented comment" not in note
+
+
 def test_retire_refuses_existing_archive(repo):
     (repo / "archive" / "Ash_Vale").mkdir(parents=True)
     with pytest.raises(FileExistsError):

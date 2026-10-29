@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+from ddtools.checks import load_secrets
 from ddtools.config import FILENAME, Character, character_dirs, load_character, save_character
 
 TEMPLATE = Path(__file__).resolve().parent / "character_template"
@@ -74,13 +75,7 @@ def new_character(
 
 
 def _retired_note(ch: Character, reason: str, note: str) -> str:
-    secrets = []
-    if ch.secrets_path.exists():
-        secrets = [
-            line.strip()
-            for line in ch.secrets_path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.startswith("#")
-        ]
+    secrets = load_secrets(ch.secrets_path) if ch.secrets_path.exists() else []
     open_rules = [r["text"] for r in ch.campaign.get("rules") or [] if r.get("status") == "open"]
     dm_docs = [d.file for d in ch.documents if d.audience == "dm"]
     lines = [
@@ -95,7 +90,7 @@ def _retired_note(ch: Character, reason: str, note: str) -> str:
         lines.append(f"- **Note:** {note}")
     lines += ["", "## Threads that could carry into the next character's story", ""]
     lines += ["Secrets that were never revealed:", ""]
-    lines += [f"- {s}" for s in secrets] or ["- (none recorded)"]
+    lines += [f"- {s.text}" for s in secrets] or ["- (none recorded)"]
     lines += ["", "Open DM questions:", ""]
     lines += [f"- {r}" for r in open_rules] or ["- (none)"]
     if dm_docs:

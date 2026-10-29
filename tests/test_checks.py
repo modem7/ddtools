@@ -18,6 +18,12 @@ def test_load_secrets(tmp_path):
     ]
 
 
+def test_load_secrets_skips_empty_quotes(tmp_path):
+    f = tmp_path / "secrets.txt"
+    f.write_text('""\n" "\nsmuggler\n', encoding="utf-8")
+    assert load_secrets(f) == [Secret("smuggler", False)]
+
+
 def test_clean_quotes_and_whitespace():
     assert clean("Captain’s  Cargo\n“x”­z") == 'Captain\'s Cargo "x"z'
 

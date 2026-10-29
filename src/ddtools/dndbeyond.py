@@ -250,11 +250,12 @@ def diff(old: dict, new: dict) -> dict:
 
 # ---- watch ---------------------------------------------------------------
 
-MEANINGFUL = (
-    "level", "classes", "spells_added", "spells_removed", "options_added", "options_removed",
-    "feats_added", "feats_removed", "items_added", "items_removed", "attunement_changed",
-    "stats", "hp_base",
+# Diff keys holding a plain list of names.
+LIST_DIFFS = (
+    "options_added", "options_removed", "feats_added", "feats_removed",
+    "items_added", "items_removed", "attunement_changed",
 )  # fmt: skip
+MEANINGFUL = ("level", "classes", "spells_added", "spells_removed", *LIST_DIFFS, "stats", "hp_base")
 
 
 def is_meaningful(d: dict) -> bool:
@@ -313,7 +314,7 @@ def issue_markdown(result: dict) -> tuple[str, str]:
         for label, key in [("Spells added", "spells_added"), ("Spells removed", "spells_removed")]:
             for src, names in own[key].items():
                 lines.append(f"- {label} ({src}): {', '.join(names)}")
-        for key in MEANINGFUL[4:11]:
+        for key in LIST_DIFFS:
             if own[key]:
                 lines.append(f"- {key.replace('_', ' ').capitalize()}: {', '.join(own[key])}")
         for k, (a, b) in own["stats"].items():
