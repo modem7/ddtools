@@ -101,3 +101,13 @@ def test_changes_are_written_even_when_another_sheet_errors(char, monkeypatch, t
     _serve(monkeypatch, own, ddb.DndBeyondError("Character 777: HTTP 403"))
     assert main(["watch", str(char), "--issue-dir", str(tmp_path / "issues")]) == 1
     assert "Hex" in (tmp_path / "issues" / "Fixture_Hero.md").read_text()
+
+
+def test_unexpected_sheet_shape_is_reported_not_raised(char, monkeypatch):
+    from ddtools.config import load_character
+
+    monkeypatch.setattr(
+        ddb, "fetch_character", lambda cid: {"id": cid, "classes": [{"id": 1, "level": 3}]}
+    )
+    result = ddb.watch_character(load_character(char))
+    assert result["errors"], "a sheet missing 'definition' must be reported"

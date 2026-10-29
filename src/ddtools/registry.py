@@ -1,7 +1,7 @@
 """The command registry: every ``ddtools <name>`` subcommand, built-in or from a plugin.
 
 ``cli`` and ``plugins`` both use this module, so neither needs the other's internals.
-It imports nothing from ddtools.
+It imports only ``ddtools.errors``.
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ import argparse
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
+from ddtools.errors import DdtoolsError
+
 # Adds a command's arguments. Any return value is ignored (so a lambda calling
 # ``p.add_argument`` is fine).
 Configure = Callable[[argparse.ArgumentParser], object]
@@ -17,7 +19,7 @@ Configure = Callable[[argparse.ArgumentParser], object]
 Handler = Callable[[argparse.Namespace], int]
 
 
-class DuplicateCommandError(ValueError):
+class DuplicateCommandError(DdtoolsError, ValueError):
     """A command name is already registered."""
 
 

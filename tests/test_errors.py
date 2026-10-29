@@ -54,7 +54,7 @@ def test_party_without_id_is_reported(tmp_path, monkeypatch, capsys):
     d = _yaml(tmp_path, "[{name: Bramble}]")
     monkeypatch.setattr(ddb, "fetch_character", lambda cid: pytest.fail("no fetch"))
     assert main(["party", str(d)]) == 1
-    assert "no dndbeyond_id for Bramble" in capsys.readouterr().out
+    assert "no dndbeyond_id for Bramble" in capsys.readouterr().err
 
 
 def test_watch_reports_party_member_without_id(tmp_path, monkeypatch):
@@ -79,13 +79,13 @@ def test_cli_reports_bad_snapshots(tmp_path, monkeypatch, capsys):
     ash = make_campaign(tmp_path)
     (ash / "snapshots" / "2026-02-01.json").write_text("{oops", encoding="utf-8")
     assert main(["summary", str(ash)]) == 1
-    assert "2026-02-01.json" in capsys.readouterr().out
+    assert "2026-02-01.json" in capsys.readouterr().err
     assert main(["diff", str(ash)]) == 1
-    assert "2026-02-01.json" in capsys.readouterr().out
+    assert "2026-02-01.json" in capsys.readouterr().err
     assert main(["diff", str(ash), "nope-a.json", "nope-b.json"]) == 1
-    assert "nope-a.json: not found" in capsys.readouterr().out
+    assert "nope-a.json: not found" in capsys.readouterr().err
     assert main(["check", str(ash)]) == 1
-    assert "2026-02-01.json" in capsys.readouterr().out
+    assert "2026-02-01.json" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("entry", [{"name": "x"}, {"id": 777}, "Bramble"])
@@ -114,7 +114,7 @@ def test_cli_list_reports_a_broken_character(tmp_path, monkeypatch, capsys):
     _yaml(tmp_path, "[{dndbeyond_id: 5}]")
     monkeypatch.chdir(tmp_path)
     assert main(["list"]) == 1
-    assert "campaign.party[0] needs a name" in capsys.readouterr().out
+    assert "campaign.party[0] needs a name" in capsys.readouterr().err
 
 
 def _baseline(tmp_path):
@@ -152,7 +152,7 @@ def test_sheet_text_reports_a_bad_snapshot(tmp_path, capsys):
     (ash / "dndbeyond.yaml").write_text("details: {}\n", encoding="utf-8")
     (ash / "snapshots" / "2026-02-01.json").write_text("{oops", encoding="utf-8")
     assert main(["sheet-text", str(ash)]) == 1
-    assert "2026-02-01.json" in capsys.readouterr().out
+    assert "2026-02-01.json" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("text", ["details: [unclosed", "- just\n- a list\n"])
@@ -160,7 +160,7 @@ def test_sheet_text_reports_a_bad_source_file(tmp_path, capsys, text):
     ash = make_campaign(tmp_path)
     (ash / "dndbeyond.yaml").write_text(text, encoding="utf-8")
     assert main(["sheet-text", str(ash)]) == 1
-    assert "dndbeyond.yaml" in capsys.readouterr().out
+    assert "dndbeyond.yaml" in capsys.readouterr().err
 
 
 def test_workbook_reports_missing_fonts(tmp_path, monkeypatch, capsys):
@@ -173,7 +173,7 @@ def test_workbook_reports_missing_fonts(tmp_path, monkeypatch, capsys):
         monkeypatch.delitem(sys.modules, mod, raising=False)
     try:
         assert main(["workbook", str(ash)]) == 1
-        assert "DejaVu fonts not found" in capsys.readouterr().out
+        assert "DejaVu fonts not found" in capsys.readouterr().err
     finally:
         monkeypatch.undo()
         for mod in ("ddtools.pdfstyle", "ddtools.workbook"):

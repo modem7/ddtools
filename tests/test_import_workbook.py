@@ -93,7 +93,7 @@ def test_a_pdf_that_is_not_a_workbook_is_refused(mossy, tmp_path, capsys):
     c.drawString(10, 10, "hello")
     c.save()
     assert main(["import-workbook", str(other), str(mossy)]) == 1
-    assert "not a ddtools workbook" in capsys.readouterr().out
+    assert "not a ddtools workbook" in capsys.readouterr().err
     assert not (mossy / "notes" / "sources" / "workbook-answers.md").exists()
 
 
@@ -129,8 +129,8 @@ def test_failed_import_writes_nothing(mossy, tmp_path, monkeypatch):
 
 def test_missing_or_bad_pdf_is_reported(mossy, tmp_path, capsys):
     assert main(["import-workbook", str(tmp_path / "nope.pdf"), str(mossy)]) == 1
-    assert "nope.pdf: not found" in capsys.readouterr().out
+    assert "nope.pdf: not found" in capsys.readouterr().err
     junk = tmp_path / "junk.pdf"
     junk.write_bytes(b"this is not a pdf")
     assert main(["import-workbook", str(junk), str(mossy)]) == 1
-    assert "junk.pdf" in capsys.readouterr().out
+    assert "junk.pdf" in capsys.readouterr().err

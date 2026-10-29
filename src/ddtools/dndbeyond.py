@@ -381,6 +381,8 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
                 result["errors"].append(f"{ch.name}: no committed snapshot to compare against")
         except DndBeyondError as err:
             result["errors"].append(f"{ch.name}: {err}")
+        except (KeyError, TypeError) as err:
+            result["errors"].append(f"{ch.name}: unexpected sheet shape ({err!r})")
     party_file = snapshot_dir(ch) / "party.json"
     before = {}
     if party_file.exists():
@@ -389,13 +391,13 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
             if not isinstance(entries, list) or not all(
                 isinstance(p, dict) and _PARTY_KEYS <= p.keys() for p in entries
             ):
-                raise ValueError
+                raise SnapshotError(
+                    f"{party_file}: not a list of party entries "
+                    "(remake it with `ddtools party <dir> --json`)"
+                )
             before = {p["id"]: p for p in entries}
         except SnapshotError as err:
             result["errors"].append(f"{ch.name}: {err}")
-        except ValueError:
-            result["errors"].append(f"{ch.name}: {party_file}: not a list of party entries "
-                                    "(remake it with `ddtools party <dir> --json`)")  # fmt: skip
     for member in ch.campaign.get("party") or []:
         if member.get("status") == "gone":
             continue
@@ -406,6 +408,9 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
             now = party_entry(fetch(member["dndbeyond_id"]))
         except DndBeyondError as err:
             result["errors"].append(f"{member['name']}: {err}")
+            continue
+        except (KeyError, TypeError) as err:
+            result["errors"].append(f"{member['name']}: unexpected sheet shape ({err!r})")
             continue
         was = before.get(now["id"])
         if was is None or (was["name"], was["level"], was["classes"]) != (

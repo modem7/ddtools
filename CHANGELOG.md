@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Changed:** every command prints a `DdtoolsError` once, as `error: <message>` on stderr
+  (exit code 1), caught in `main()`. Messages that used to go to stdout (bad snapshots,
+  missing folders, `Build failed in ...`, `sheet-text` problems, unknown blueprint) are now on
+  stderr, so scripts that read stdout for them need to read stderr.
+- **Changed:** `DuplicateCommandError` is a `DdtoolsError` (still a `ValueError`).
+- **Fixed:** `watch` reports a sheet with an unexpected shape, or a bad `party.json`, in its
+  errors list instead of raising.
 - **Changed:** `ddtools.workbook` no longer re-exports the `ddtools.pdfstyle` names it
   imported (`A4`, `EMBER`, `FIELD_BG`, `HEAD_BG`, `INK`, `NOTE_BG`, `RULE`, `FontsMissing`,
   `Paragraph`, `Preformatted`, `SimpleDocTemplate`, `TTFont`, `TableStyle`, `bullet`,
