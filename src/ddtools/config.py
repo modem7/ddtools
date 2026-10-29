@@ -11,6 +11,7 @@ import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from dataclasses import fields as dataclass_fields
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast, get_args
@@ -128,6 +129,26 @@ KNOWN_KEYS = {
 }  # fmt: skip
 
 
+def _document(d: dict, i: int, path: Path, base: Path) -> Document:
+    """One ``documents:`` entry, checked: known fields only, the right types, and a
+    script that stays inside the character folder (``ddtools:<name>`` aside)."""
+    known = {f.name for f in dataclass_fields(Document)}
+    for key in d:
+        if key not in known:
+            raise ConfigError(f"{path}: documents[{i}] has unknown field {key!r}")
+    for key in ("file", "script"):
+        if not isinstance(d[key], str):
+            raise ConfigError(f"{path}: documents[{i}].{key} must be text")
+    for key in ("future_sections", "spell_ignore"):
+        value = d.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise ConfigError(f"{path}: documents[{i}].{key} must be a list of text")
+    script = d["script"]
+    if not script.startswith(BUILTIN_PREFIX) and not (base / script).resolve().is_relative_to(base):
+        raise ConfigError(f"{path}: documents[{i}].script must stay inside the character folder")
+    return Document(**d)
+
+
 def load_character(char_dir: PathLike | None = None) -> Character:
     """Load and validate ``<char_dir>/character.yaml`` (default: ``$DDTOOLS_CHARACTER_DIR``).
 
@@ -159,6 +180,14 @@ def load_character(char_dir: PathLike | None = None) -> Character:
     status = data.get("status", "active")
     if status not in STATUSES:
         raise ConfigError(f"{path}: field 'status' must be one of {', '.join(STATUSES)}")
+    retired = data.get("retired")
+    if retired is not None and not (
+        isinstance(retired, dict)
+        and isinstance(retired.get("date"), date)
+        and isinstance(retired.get("reason"), str)
+        and isinstance(retired.get("note"), str)
+    ):
+        raise ConfigError(f"{path}: field 'retired' must be a mapping with date, reason and note")
     docs = []
     for i, d in enumerate(data.get("documents") or []):
         if not isinstance(d, dict) or not {"file", "script", "audience"} <= d.keys():
@@ -167,7 +196,7 @@ def load_character(char_dir: PathLike | None = None) -> Character:
             raise ConfigError(
                 f"{path}: documents[{i}].audience must be one of {', '.join(AUDIENCES)}"
             )
-        docs.append(Document(**d))
+        docs.append(_document(d, i, path, base))
     campaign = data.get("campaign") or {}
     if not isinstance(campaign, dict):
         raise ConfigError(f"{path}: field 'campaign' must be a mapping")
@@ -191,7 +220,7 @@ def load_character(char_dir: PathLike | None = None) -> Character:
         campaign=campaign,
         documents=docs,
         secrets_file=data.get("secrets_file", "secrets.txt"),
-        retired=data.get("retired"),
+        retired=retired,
         extra={k: v for k, v in data.items() if k not in KNOWN_KEYS},
         party_summary=data.get("party_summary", ""),
     )
@@ -408,7 +437,13 @@ def set_party_fields(char_dir: PathLike, name: str, fields: dict) -> None:
 
 
 def add_party_member(char_dir: PathLike, entry: dict) -> None:
-    """Append a member (``entry`` has ``name`` first) to the party list."""
+    """Append a member (``entry`` has ``name`` first) to the party list.
+
+    Raises:
+        ConfigError: ``entry`` has no ``name`` (as text), or the file is invalid.
+    """
+    if not isinstance(entry.get("name"), str) or not entry["name"]:
+        raise ConfigError(f"{FILENAME}: a party member needs a name (as text)")
 
     def plan(party: list[dict]) -> list[PartyEdit]:
         fields = {k: v for k, v in entry.items() if k != "name"}

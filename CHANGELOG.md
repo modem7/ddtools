@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Changed:** `load_character` checks each `documents:` entry (known fields, text and list
+  types, and a `script` that stays inside the character folder) and the `retired:` block,
+  and raises `ConfigError` naming the entry, not a `TypeError`. `add_party_member` raises
+  `ConfigError` for an entry without a name, not a `KeyError`.
 - **Changed:** every command prints a `DdtoolsError` once, as `error: <message>` on stderr
   (exit code 1), caught in `main()`. Messages that used to go to stdout (bad snapshots,
   missing folders, `Build failed in ...`, `sheet-text` problems, unknown blueprint) are now on

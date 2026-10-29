@@ -24,6 +24,10 @@ def build_character(char_dir: PathLike, out: PathLike | None = None) -> list[Pat
     """Run every document script in order; stop at the first failure.
 
     PDFs go to ``out`` (default ``<char_dir>/pdf``), each with a ``.txt`` text copy.
+
+    Raises:
+        ConfigError: character.yaml is missing or invalid (from ``load_character``).
+        BuildError: a script exits non-zero or does not write its PDF.
     """
     ch = load_character(char_dir)
     # Scripts run with cwd=src/, so a relative --out must be resolved here.

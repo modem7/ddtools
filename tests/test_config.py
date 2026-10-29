@@ -5,6 +5,7 @@ import pytest
 
 from ddtools.config import (
     ConfigError,
+    add_party_member,
     level_updated_label,
     load_character,
     output_path,
@@ -270,3 +271,49 @@ def test_set_party_fields_rewrites_an_inline_party_list(tmp_path):
     ))  # fmt: skip
     set_party_fields(d, "Pal", {"summary": "Elf Rogue"})
     assert load_character(d).campaign["party"][0]["summary"] == "Elf Rogue"
+
+
+def _with_documents(tmp_path, doc):
+    return _write(tmp_path, VALID.split("documents:")[0] + f"documents:\n  - {doc}\n")
+
+
+@pytest.mark.parametrize(
+    ("doc", "field"),
+    [
+        ("{file: a.pdf, script: s.py, audience: party, future_section: [x]}", "future_section"),
+        ("{file: a.pdf, script: s.py, audience: party, future_sections: oops}", "future_sections"),
+        ("{file: a.pdf, script: s.py, audience: party, spell_ignore: [1]}", "spell_ignore"),
+        ("{file: 3, script: s.py, audience: party}", "file"),
+        ("{file: a.pdf, script: ../x.py, audience: party}", "script"),
+        ("{file: a.pdf, script: /etc/x.py, audience: party}", "script"),
+    ],
+)
+def test_bad_document_entry_is_a_config_error(tmp_path, doc, field):
+    d = _with_documents(tmp_path, doc)
+    with pytest.raises(ConfigError) as exc:
+        load_character(d)
+    assert "documents[0]" in str(exc.value)
+    assert field in str(exc.value)
+
+
+def test_builtin_scripts_skip_the_containment_check(tmp_path):
+    d = _with_documents(tmp_path, "{file: a.pdf, script: 'ddtools:workbook', audience: party}")
+    assert load_character(d).documents[0].is_builtin
+
+
+@pytest.mark.parametrize(
+    "retired", ["gone", "{reason: tpk}", "{date: 2026-01-01, reason: 3, note: x}"]
+)
+def test_bad_retired_block_is_a_config_error(tmp_path, retired):
+    d = _write(tmp_path, VALID + f"retired: {retired}\n")
+    with pytest.raises(ConfigError) as exc:
+        load_character(d)
+    assert "retired" in str(exc.value)
+
+
+def test_add_party_member_without_a_name_is_a_config_error(tmp_path):
+    d = _write(tmp_path)
+    for entry in ({}, {"name": ""}, {"name": 5}):
+        with pytest.raises(ConfigError) as exc:
+            add_party_member(d, entry)
+        assert "needs a name" in str(exc.value)
