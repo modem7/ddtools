@@ -125,3 +125,7 @@ def test_cli_fails_on_a_leak_and_writes_nothing(ash, capsys):
 def test_every_short_detail_is_checked(ash, key):
     _write(ash, _source(details={key: "x" * 51}))
     assert any(key in p for p in T.report(load_character(ash))["problems"])
+
+
+def test_status_is_still_available_under_its_old_name():
+    assert T.status("New text", None) == T.field_status("New text", None) == "missing"
