@@ -118,7 +118,7 @@ def test_cli_fails_on_a_leak_and_writes_nothing(ash, capsys):
     out = ash / "notes" / "dndbeyond-text.md"
     assert main(["sheet-text", str(ash)]) == 1
     assert not out.exists()
-    assert "smuggler" in capsys.readouterr().out
+    assert "smuggler" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("key", ["hair", "eyes", "skin"])

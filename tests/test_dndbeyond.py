@@ -150,7 +150,7 @@ def test_cli_diff_needs_two_snapshots(tmp_path, capsys):
 
     d = _char(tmp_path, ["ddb_min.json"])
     assert main(["diff", str(d)]) == 1
-    assert "ddtools fetch" in capsys.readouterr().out
+    assert "ddtools fetch" in capsys.readouterr().err
 
 
 def test_cli_diff_prints_checklist(tmp_path, capsys):

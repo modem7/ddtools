@@ -8,8 +8,10 @@ of summary, diff and watch is in ``ddtools.report``, and golden's in ``ddtools.g
 from __future__ import annotations
 
 import argparse
+import sys
 
 from ddtools import __version__, plugins
+from ddtools.errors import DdtoolsError
 from ddtools.registry import COMMANDS, Configure, Handler, command, unregister
 from ddtools.report import print_json as _print_json
 
@@ -17,7 +19,6 @@ __all__ = ["Configure", "Handler", "build_parser", "command", "main", "unregiste
 
 
 def build_parser() -> argparse.ArgumentParser:
-    import sys
 
     for warning in plugins.load():
         print(f"warning: {warning}", file=sys.stderr)
@@ -39,7 +40,11 @@ def main(argv: list[str] | None = None) -> int:
     if not getattr(args, "func", None):
         parser.print_help()
         return 0
-    return args.func(args)
+    try:
+        return args.func(args)
+    except DdtoolsError as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
 
 
 def _page_range(text: str | None) -> range | None:
@@ -67,7 +72,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
         want = args.pdf.removesuffix(".pdf")
         pdfs = [p for p in pdfs if p.stem == want]
     if not pdfs:
-        print(f"No matching PDFs in {Path(args.dir) / 'pdf'}")
+        print(f"No matching PDFs in {Path(args.dir) / 'pdf'}", file=sys.stderr)
         return 1
     for pdf in pdfs:
         out = Path.cwd() / "tmp" / f"preview-{pdf.stem}.png"
@@ -95,13 +100,8 @@ def cmd_golden(args: argparse.Namespace) -> int:
 
     from ddtools import golden
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
 
-    try:
-        ch = load_character(args.dir)
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    ch = load_character(args.dir)
     dest = Path.cwd() / "tests" / "golden" / ch.dir.name
     if args.action == "check":
         return golden.check_character(ch, dest)
@@ -119,17 +119,13 @@ def _build_args(p: argparse.ArgumentParser) -> None:
 @command("build", "Build a character's PDFs (and .txt copies) from its scripts.", _build_args)
 def cmd_build(args: argparse.Namespace) -> int:
     from ddtools.build import BuildError, build_character
-    from ddtools.errors import DdtoolsError
     from ddtools.preview import page_count
 
     try:
         for pdf in build_character(args.dir, args.out):
             print(f"{pdf}  ({page_count(pdf)} pages)")
     except BuildError as err:
-        print(f"Build failed in {err.script}:\n{err.stderr}")
-        return 1
-    except DdtoolsError as err:
-        print(err)
+        print(f"Build failed in {err.script}:\n{err.stderr}", file=sys.stderr)
         return 1
     return 0
 
@@ -162,20 +158,15 @@ def _is_dir(target: str) -> bool:
 def cmd_fetch(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
 
-    try:
-        if _is_dir(args.target):
-            ch = load_character(args.target)
-            if not ch.dndbeyond_id:
-                print(f"{ch.dir / 'character.yaml'}: no dndbeyond_id set")
-                return 1
-            print(ddb.save_snapshot(ch, ddb.fetch_character(ch.dndbeyond_id)))
-        else:
-            _print_json(ddb.fetch_character(ddb.parse_id(args.target)))
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    if _is_dir(args.target):
+        ch = load_character(args.target)
+        if not ch.dndbeyond_id:
+            print(f"{ch.dir / 'character.yaml'}: no dndbeyond_id set", file=sys.stderr)
+            return 1
+        print(ddb.save_snapshot(ch, ddb.fetch_character(ch.dndbeyond_id)))
+    else:
+        _print_json(ddb.fetch_character(ddb.parse_id(args.target)))
     return 0
 
 
@@ -183,23 +174,21 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 def cmd_summary(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
     from ddtools.report import format_summary
 
-    try:
-        if _is_dir(args.target):
-            snaps = ddb.latest_snapshots(load_character(args.target), 1)
-            if not snaps:
-                print(f"No snapshots yet: run `ddtools fetch {args.target}` first.")
-                return 1
-            data = ddb.load_snapshot(snaps[-1])
-        else:
-            data = ddb.fetch_character(ddb.parse_id(args.target))
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    if _is_dir(args.target):
+        snaps = ddb.latest_snapshots(load_character(args.target), 1)
+        if not snaps:
+            print(f"No snapshots yet: run `ddtools fetch {args.target}` first.", file=sys.stderr)
+            return 1
+        data = ddb.load_snapshot(snaps[-1])
+    else:
+        data = ddb.fetch_character(ddb.parse_id(args.target))
     s = ddb.summarise(data)
-    _print_json(s) if args.json else print(format_summary(s))
+    if args.json:
+        _print_json(s)
+    else:
+        print(format_summary(s))
     return 0
 
 
@@ -207,24 +196,21 @@ def cmd_summary(args: argparse.Namespace) -> int:
 def cmd_party(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
 
-    try:
-        ch = load_character(args.dir)
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    ch = load_character(args.dir)
     members = [p for p in ch.campaign.get("party") or [] if p.get("status") != "gone"]
     no_id = [p["name"] for p in members if not p.get("dndbeyond_id")]
     if no_id:
-        print(f"{ch.dir / 'character.yaml'}: no dndbeyond_id for {', '.join(no_id)}")
+        print(
+            f"{ch.dir / 'character.yaml'}: no dndbeyond_id for {', '.join(no_id)}", file=sys.stderr
+        )
         return 1
     rows = []
     for member in members:
         try:
             rows.append(ddb.party_entry(ddb.fetch_character(member["dndbeyond_id"])))
         except ddb.DndBeyondError as err:
-            print(f"{member['name']}: {err}")
+            print(f"{member['name']}: {err}", file=sys.stderr)
             return 1
     if args.json:
         _print_json(rows)
@@ -248,20 +234,20 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
     from ddtools.report import diff_report
 
-    try:
-        files = [Path(f) for f in args.files] or ddb.latest_snapshots(load_character(args.dir))
-        if len(files) < 2:
-            print(f"Need two snapshots to compare: run `ddtools fetch {args.dir}` first.")
-            return 1
-        old, new = (ddb.load_snapshot(f) for f in files[-2:])
-    except DdtoolsError as err:
-        print(err)
+    files = [Path(f) for f in args.files] or ddb.latest_snapshots(load_character(args.dir))
+    if len(files) < 2:
+        print(
+            f"Need two snapshots to compare: run `ddtools fetch {args.dir}` first.", file=sys.stderr
+        )
         return 1
+    old, new = (ddb.load_snapshot(f) for f in files[-2:])
     d = ddb.diff(old, new)
-    _print_json(d) if args.json else print(diff_report(files[-2].name, files[-1].name, d))
+    if args.json:
+        _print_json(d)
+    else:
+        print(diff_report(files[-2].name, files[-1].name, d))
     return 0
 
 
@@ -295,13 +281,8 @@ def _check_args(p: argparse.ArgumentParser) -> None:
 def cmd_check(args: argparse.Namespace) -> int:
     from ddtools.checks import run_checks
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
 
-    try:
-        problems = run_checks(load_character(args.dir), pdf_dir=args.pdf_dir)
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    problems = run_checks(load_character(args.dir), pdf_dir=args.pdf_dir)
     for p in problems:
         print(p)
     if not problems:
@@ -323,19 +304,14 @@ def _new_args(p: argparse.ArgumentParser) -> None:
 def cmd_new_character(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from ddtools.errors import DdtoolsError
     from ddtools.lifecycle import new_character
 
-    try:
-        d = new_character(
-            args.name,
-            Path.cwd(),
-            campaign_from=Path(args.campaign_from) if args.campaign_from else None,
-            new_campaign=args.new_campaign,
-        )
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    d = new_character(
+        args.name,
+        Path.cwd(),
+        campaign_from=Path(args.campaign_from) if args.campaign_from else None,
+        new_campaign=args.new_campaign,
+    )
     print(f"Created {d}. Next: set dndbeyond_id in {d.name}/character.yaml, then `ddtools fetch`.")
     return 0
 
@@ -352,13 +328,12 @@ def _retire_args(p: argparse.ArgumentParser) -> None:
 def cmd_retire(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from ddtools.errors import DdtoolsError
     from ddtools.lifecycle import retire
 
     try:
         dest = retire(Path(args.dir), args.reason, args.note, Path.cwd())
-    except (DdtoolsError, OSError) as err:  # OSError: a failed write or move, rolled back
-        print(err)
+    except OSError as err:  # a failed write or move, rolled back
+        print(f"error: {err}", file=sys.stderr)
         return 1
     print(f"Retired to {dest}. Read {dest / 'RETIRED.md'} for threads to carry forward.")
     return 0
@@ -372,15 +347,10 @@ def cmd_retire(args: argparse.Namespace) -> int:
 def cmd_list(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from ddtools.errors import DdtoolsError
     from ddtools.lifecycle import list_characters
 
     root = Path.cwd()
-    try:
-        chars = list_characters(root)
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    chars = list_characters(root)
     rows = [
         {
             "name": c.name,
@@ -411,17 +381,12 @@ def _sheet_text_args(p: argparse.ArgumentParser) -> None:
 def cmd_sheet_text(args: argparse.Namespace) -> int:
     from ddtools import sheettext as T
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
 
-    try:
-        ch = load_character(args.dir)
-        rep = T.report(ch)
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    ch = load_character(args.dir)
+    rep = T.report(ch)
     if rep["problems"]:
         print("Not written, fix these in " + T.SOURCE_FILE + " first:\n  "
-              + "\n  ".join(rep["problems"]))  # fmt: skip
+              + "\n  ".join(rep["problems"]), file=sys.stderr)  # fmt: skip
         return 1
     path = T.write(ch, rep)
     for f in rep["fields"]:
@@ -440,17 +405,10 @@ def _workbook_args(p: argparse.ArgumentParser) -> None:
 @command("workbook", "Build the party workbook (a fillable PDF) from the campaign.", _workbook_args)
 def cmd_workbook(args: argparse.Namespace) -> int:
     from ddtools.config import load_character
-    from ddtools.errors import DdtoolsError
     from ddtools.textdump import write_text_copy
+    from ddtools.workbook import build_workbook  # registers the fonts, so can raise
 
-    try:
-        from ddtools.workbook import build_workbook  # registers the fonts, so can raise
-
-        ch = load_character(args.dir)
-        out = build_workbook(ch)
-    except DdtoolsError as err:
-        print(err)
-        return 1
+    out = build_workbook(load_character(args.dir))
     write_text_copy(out)
     print(f"Wrote {out}")
     return 0
@@ -469,13 +427,12 @@ def _import_workbook_args(p: argparse.ArgumentParser) -> None:
 def cmd_import_workbook(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from ddtools.errors import DdtoolsError
     from ddtools.workbook_import import import_workbook
 
     try:
         got = import_workbook(Path(args.pdf), Path(args.dir))
-    except (DdtoolsError, OSError) as err:  # OSError: a failed write, already rolled back
-        print(err)
+    except OSError as err:  # a failed write, already rolled back
+        print(f"error: {err}", file=sys.stderr)
         return 1
     print(f"Wrote {got['answers']}")
     for line in got["filled"]:
@@ -502,7 +459,7 @@ def cmd_blueprints(args: argparse.Namespace) -> int:
         return 0
     name = args.name.removesuffix(".md")
     if name not in names:
-        print(f"No blueprint called {name}. There are: {', '.join(names)}")
+        print(f"No blueprint called {name}. There are: {', '.join(names)}", file=sys.stderr)
         return 1
     print((folder / f"{name}.md").read_text(encoding="utf-8"))
     return 0

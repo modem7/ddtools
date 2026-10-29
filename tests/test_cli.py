@@ -19,7 +19,7 @@ def test_blueprints_lists_and_prints(capsys):
     assert main(["blueprints", "party-handout"]) == 0
     assert "# Blueprint: party handout" in capsys.readouterr().out
     assert main(["blueprints", "nope"]) == 1
-    assert "party-handout" in capsys.readouterr().out, "lists what exists"
+    assert "party-handout" in capsys.readouterr().err, "lists what exists"
 
 
 def test_golden_check_compares_a_rebuild_with_the_baseline(tmp_path, monkeypatch, capsys):
@@ -35,3 +35,10 @@ def test_golden_check_compares_a_rebuild_with_the_baseline(tmp_path, monkeypatch
     guide = d / "src" / "build_guide.py"
     guide.write_text(guide.read_text().replace("TL;DR", "Too long", 1))
     assert main(["golden", "check", str(d)]) == 1
+
+
+def test_a_missing_folder_is_one_line_on_stderr(tmp_path, capsys):
+    missing = tmp_path / "Nobody"
+    assert main(["golden", "check", str(missing)]) == 1
+    got = capsys.readouterr()
+    assert (got.out, got.err) == ("", f"error: {missing}/character.yaml: not found\n")

@@ -317,5 +317,5 @@ def test_golden_build_failure(golden_char, monkeypatch, capsys, action):
 
 def test_golden_bad_folder(tmp_path, capsys):
     missing = tmp_path / "Nobody"
-    want = f"{missing}/character.yaml: not found\n"
-    assert _run(capsys, ["golden", "check", str(missing)]) == (1, want, "")
+    want = f"error: {missing}/character.yaml: not found\n"
+    assert _run(capsys, ["golden", "check", str(missing)]) == (1, "", want)

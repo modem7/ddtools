@@ -53,7 +53,7 @@ def test_failing_script_raises(tmp_path):
 def test_cli_build_failure_exit_code(tmp_path, capsys):
     d = _character(tmp_path, "raise RuntimeError('boom in script')\n")
     assert main(["build", str(d)]) == 1
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "Build failed in" in out and "boom in script" in out
 
 
