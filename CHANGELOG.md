@@ -26,6 +26,11 @@
   `import_workbook`, `set_top_level`, `set_party_fields`, `add_party_member` and
   `sheettext.load_source`.
 - **Changed:** `ddtools.sheettext.status` is now `field_status`.
+- **Changed:** `ddtools.workbook` is split into one function per section. The workbook
+  PDF is the same. `section_titles(ch)` gives the section titles without building it,
+  and `ddtools.workbook_fields` has the field names (`field_key`, `section_of`) for the
+  workbook and `import-workbook`. `TITLES`, `VERSION`, `field_key`, `field`, `ticks`,
+  `section` and `prompts` are gone from `ddtools.workbook`.
 
 ## 0.2.0
 
