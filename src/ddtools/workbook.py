@@ -12,11 +12,38 @@ Run as a document script: ``script: ddtools:workbook`` in ``character.yaml``.
 from __future__ import annotations
 
 import textwrap
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 from ddtools.config import Character, is_present, load_character, output_path, updated_label
-from ddtools.pdfstyle import *  # noqa: F403
+from ddtools.pdfstyle import (
+    ACCENT,
+    MUTED,
+    WARN_BG,
+    CondPageBreak,
+    Field,
+    Flowable,
+    KeepTogether,
+    P,
+    PageBreak,
+    ParagraphStyle,
+    Spacer,
+    Table,
+    Ticks,
+    bl,
+    body,
+    box,
+    build,
+    code,
+    colors,
+    h1,
+    h2,
+    mm,
+    small,
+    sub,
+    table,
+    title,
+)
 from ddtools.workbook_fields import field_key
 
 FILE = "Party_Character_Guide_Workbook.pdf"
@@ -25,11 +52,11 @@ TITLES: dict[int, str] = {0: "Start"}  # section number -> title, filled as the 
 
 
 def field(label: str, lines: int = 3) -> Field:
-    return Field(label, lines, key=field_key(_section[0], label))  # noqa: F405
+    return Field(label, lines, key=field_key(_section[0], label))
 
 
 def ticks(options: Sequence[str], cols: int = 3, **kw: float) -> Ticks:
-    return Ticks(options, cols, key=field_key(_section[0], options[0]), **kw)  # noqa: F405
+    return Ticks(options, cols, key=field_key(_section[0], options[0]), **kw)
 
 
 NUMBERS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
@@ -56,10 +83,6 @@ def section(
     tag += "</font>"
     out += [P(tag, small), Spacer(1, 3), P("<b>Why:</b> " + why, body)]
     return out
-
-
-def prompts(items: Iterable[str]) -> list[Paragraph]:
-    return bl(items)
 
 
 def story(CH: Character) -> list[Flowable]:
@@ -245,7 +268,7 @@ def story(CH: Character) -> list[Flowable]:
     )
     S.append(P("Try one of these formulas:", body))
     S.extend(
-        prompts(
+        bl(
             [
                 "<b>[Famous character] meets [another famous character].</b>",
                 "<b>A [adjective] [role] who wants [goal] but [problem].</b>",
@@ -280,7 +303,7 @@ def story(CH: Character) -> list[Flowable]:
         "this is where DM hooks and role-play ideas come from. Even a messy paragraph gives Claude a lot to work with.",
     )
     S.extend(
-        prompts(
+        bl(
             [
                 "Paste your backstory as it is. Long, short, or bullet points.",
                 "If you have two versions (a short one the party knows and a longer private one), paste both and say which is which.",
@@ -526,7 +549,7 @@ def story(CH: Character) -> list[Flowable]:
     S.append(Spacer(1, 4))
     S.append(P("For each teammate (skip yourself), answer any of these:", body))
     S.extend(
-        prompts(
+        bl(
             [
                 "What do you <b>think of them</b>? (Trust, annoyed by, impressed by, protective of, suspicious of…)",
                 "What would you <b>tease them about</b>? What would you <b>ask them</b>?",
@@ -836,7 +859,7 @@ def build_workbook(ch: Character | None = None) -> Path:
     """Write the workbook PDF for ``ch`` (default: the character being built)."""
     ch = ch or load_character()
     out = output_path(ch, FILE)
-    build(story(ch), out, f"Your Character Guide — Workbook · {updated_label(ch)}")  # noqa: F405
+    build(story(ch), out, f"Your Character Guide — Workbook · {updated_label(ch)}")
     return out
 
 
