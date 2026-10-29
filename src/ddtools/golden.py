@@ -12,6 +12,7 @@ import html
 import json
 import re
 from pathlib import Path
+from typing import TypedDict
 
 from PIL import Image, ImageChops, ImageStat
 
@@ -29,6 +30,22 @@ _HEADING = re.compile(r'P\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*(h1|h2)\s*\)')
 _SECTION = re.compile(r'\bsection\(\s*(\d+)\s*,\s*"((?:[^"\\]|\\.)*)"')
 _TAG = re.compile(r"<[^>]+>")
 _BASELINE_KEYS = ("pages", "headings", "texts")
+
+
+class Heading(TypedDict):
+    """A heading and the (1-based) page it lands on; None if it wasn't found."""
+
+    level: str
+    text: str
+    page: int | None
+
+
+class Baseline(TypedDict):
+    """A golden baseline's JSON."""
+
+    pages: int
+    headings: list[Heading]
+    texts: list[str]
 
 
 def _collapse(text: str) -> str:
@@ -61,10 +78,10 @@ def headings_from_script(script: Path) -> list[tuple[str, str]]:
     return [(level, text) for _, level, text in sorted(found)]
 
 
-def locate_headings(pages: list[str], headings: list[tuple[str, str]]) -> list[dict]:
+def locate_headings(pages: list[str], headings: list[tuple[str, str]]) -> list[Heading]:
     """Find the (1-based) page each heading lands on, searching forward so repeats map in order."""
     flat = [_collapse(p) for p in pages]
-    result = []
+    result: list[Heading] = []
     page, offset = 0, 0
     for level, text in headings:
         hit = None
@@ -82,11 +99,11 @@ def _render(pdf: Path, index: int) -> Image.Image:
     return render_page(pdf, index, SCALE).convert("L")
 
 
-def capture(pdf: Path, script: Path, dest: Path, name: str | None = None) -> dict:
+def capture(pdf: Path, script: Path, dest: Path, name: str | None = None) -> Baseline:
     """Record a baseline for ``pdf`` (headings taken from ``script``) into ``dest``."""
     name = name or Path(pdf).stem
     pages = page_texts(pdf)
-    data = {
+    data: Baseline = {
         "pages": len(pages),
         "headings": locate_headings(pages, headings_from_script(script)),
         "texts": [normalise(p) for p in pages],
@@ -146,11 +163,11 @@ def compare(
             )
     if len(now) != len(base["headings"]):
         problems.append(f"{name}: {len(now)} headings, baseline {len(base['headings'])}")
-    for i, (was, got) in enumerate(zip(base["texts"], pages, strict=False), 1):
-        got = normalise(got)
-        if was != got:
+    for i, (was_text, page) in enumerate(zip(base["texts"], pages, strict=False), 1):
+        got_text = normalise(page)
+        if was_text != got_text:
             diff = difflib.unified_diff(
-                was.split(". "), got.split(". "), "baseline", "rebuilt", lineterm="", n=0
+                was_text.split(". "), got_text.split(". "), "baseline", "rebuilt", lineterm="", n=0
             )
             problems.append(f"{name}: text differs on page {i}:\n" + "\n".join(list(diff)[:20]))
     for i in range(min(len(pages), base["pages"])):

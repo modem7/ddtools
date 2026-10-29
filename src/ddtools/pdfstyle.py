@@ -12,7 +12,9 @@ them from another folder; if it is set and a file is missing, import raises
 from __future__ import annotations
 
 import os
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -34,6 +36,13 @@ from reportlab.platypus import (
 )
 
 from ddtools.errors import DdtoolsError
+
+if TYPE_CHECKING:
+    from reportlab.lib.colors import Color
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus.doctemplate import BaseDocTemplate
+
+    from ddtools.config import PathLike
 
 __all__ = [
     "A4", "mm", "colors", "ParagraphStyle", "Paragraph", "Spacer", "Table", "TableStyle",
@@ -112,15 +121,15 @@ bullet = ParagraphStyle("bullet", parent=body, leftIndent=12, bulletIndent=2, sp
 mono = ParagraphStyle("mono", fontName="DVM", fontSize=7.6, leading=9.8, textColor=INK)
 
 
-def P(t, s=body):
+def P(t: str, s: ParagraphStyle = body) -> Paragraph:
     return Paragraph(t, s)
 
 
-def bl(items):
+def bl(items: Iterable[str]) -> list[Paragraph]:
     return [Paragraph(i, bullet, bulletText="•") for i in items]
 
 
-def table(rows, widths, header=True):
+def table(rows: Sequence[Sequence[str]], widths: Sequence[float], header: bool = True) -> Table:
     data = [
         [P(c, smallb if (header and r == 0) else small) for c in row] for r, row in enumerate(rows)
     ]
@@ -142,7 +151,7 @@ def table(rows, widths, header=True):
     return t
 
 
-def box(paras, bg=NOTE_BG, edge=EMBER):
+def box(paras: Sequence[Flowable], bg: Color = NOTE_BG, edge: Color = EMBER) -> Table:
     t = Table([[paras]], colWidths=[170 * mm])
     t.setStyle(
         TableStyle(
@@ -159,7 +168,7 @@ def box(paras, bg=NOTE_BG, edge=EMBER):
     return t
 
 
-def code(lines):
+def code(lines: Iterable[str]) -> Table:
     """A copyable monospace block (prompts, commands)."""
     t = Table([[Preformatted("\n".join(lines), mono)]], colWidths=[170 * mm])
     t.setStyle(
@@ -180,7 +189,7 @@ def code(lines):
 _field_counter = [0]
 
 
-def _field_id(prefix):
+def _field_id(prefix: str) -> str:
     _field_counter[0] += 1
     return f"{prefix}_{_field_counter[0]}"
 
@@ -188,13 +197,16 @@ def _field_id(prefix):
 class Field(Flowable):
     """A write-in area: ruled lines for printing, plus a fillable text box for typing."""
 
-    def __init__(self, label=None, lines=3, width=170 * mm, key=None):
+    def __init__(
+        self, label: str | None = None, lines: int = 3, width: float = 170 * mm,
+        key: str | None = None,
+    ) -> None:  # fmt: skip
         super().__init__()
         self.label, self.lines, self.w, self.key = label, lines, width, key
         self.lh = 6.2 * mm
         self.h = self.lines * self.lh + (4.2 * mm if label else 0) + 2 * mm
 
-    def wrap(self, aw, ah):
+    def wrap(self, aw: float, ah: float) -> tuple[float, float]:
         return self.w, self.h
 
     def draw(self) -> None:
@@ -227,17 +239,20 @@ class Field(Flowable):
 class Ticks(Flowable):
     """Tick boxes in columns: click on screen or tick with a pen."""
 
-    def __init__(self, options, cols=3, width=170 * mm, key=None):
+    def __init__(
+        self, options: Sequence[str], cols: int = 3, width: float = 170 * mm,
+        key: str | None = None,
+    ) -> None:  # fmt: skip
         super().__init__()
         self.opts, self.cols, self.w, self.key = options, cols, width, key
         self.rh = 6 * mm
         self.rows = (len(options) + cols - 1) // cols
         self.h = self.rows * self.rh + 1 * mm
 
-    def wrap(self, aw, ah):
+    def wrap(self, aw: float, ah: float) -> tuple[float, float]:
         return self.w, self.h
 
-    def draw(self):
+    def draw(self) -> None:
         c = self.canv
         cw = self.w / self.cols
         for i, o in enumerate(self.opts):
@@ -254,8 +269,8 @@ class Ticks(Flowable):
             c.drawString(x + 5.5 * mm, y + 1.8 * mm, o)
 
 
-def make_footer(label):
-    def footer(c, d):
+def make_footer(label: str) -> Callable[[Canvas, BaseDocTemplate], None]:
+    def footer(c: Canvas, d: BaseDocTemplate) -> None:
         c.saveState()
         c.setFont("DV", 7.5)
         c.setFillColor(MUTED)
@@ -266,7 +281,7 @@ def make_footer(label):
     return footer
 
 
-def build(story, path, label, author=""):
+def build(story: list[Flowable], path: PathLike, label: str, author: str = "") -> None:
     """Build an A4 document with the standard margins and footer."""
     doc = SimpleDocTemplate(
         str(path), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,

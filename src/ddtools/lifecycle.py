@@ -12,7 +12,14 @@ from pathlib import Path
 import yaml
 
 from ddtools.checks import load_secrets
-from ddtools.config import FILENAME, Character, character_dirs, load_character, save_character
+from ddtools.config import (
+    FILENAME,
+    Character,
+    PathLike,
+    character_dirs,
+    load_character,
+    save_character,
+)
 from ddtools.errors import DdtoolsError
 
 TEMPLATE = Path(__file__).resolve().parent / "character_template"
@@ -44,8 +51,8 @@ def slugify(name: str) -> str:
 
 def new_character(
     name: str,
-    root: Path,
-    campaign_from: Path | None = None,
+    root: PathLike,
+    campaign_from: PathLike | None = None,
     new_campaign: str | None = None,
 ) -> Path:
     """Scaffold ``<root>/<slug>/`` from the template. Give exactly one campaign source.
@@ -121,7 +128,7 @@ def _retired_note(ch: Character, reason: str, note: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def retire(dir: Path, reason: str, note: str, root: Path) -> Path:
+def retire(char_dir: PathLike, reason: str, note: str, root: PathLike) -> Path:
     """Mark a character retired, write ``RETIRED.md`` and move them to ``<root>/archive/``.
 
     All or nothing: if saving, writing or the move fails, ``character.yaml`` and
@@ -133,12 +140,12 @@ def retire(dir: Path, reason: str, note: str, root: Path) -> Path:
     Raises:
         LifecycleError: ``reason`` isn't one of ``REASONS``.
         CharacterExists: ``<root>/archive/<folder>`` is already there.
-        ConfigError: ``dir`` isn't a valid character folder.
+        ConfigError: ``char_dir`` isn't a valid character folder.
     """
     if reason not in REASONS:
         raise LifecycleError(f"reason must be one of {', '.join(REASONS)}")
-    ch = load_character(dir)
-    dest = Path(root) / "archive" / Path(dir).name
+    ch = load_character(char_dir)
+    dest = Path(root) / "archive" / Path(char_dir).name
     if dest.exists():
         raise CharacterExists(f"{dest} already exists")
     cfg, notes = ch.dir / FILENAME, ch.dir / "RETIRED.md"
@@ -172,6 +179,6 @@ def retire(dir: Path, reason: str, note: str, root: Path) -> Path:
     return dest
 
 
-def list_characters(root: Path) -> list[Character]:
+def list_characters(root: PathLike) -> list[Character]:
     """Active characters under ``root`` and retired ones under ``root/archive``."""
     return [load_character(d) for d in character_dirs(root, include_archive=True)]

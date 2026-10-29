@@ -113,11 +113,11 @@ def test_failed_import_writes_nothing(mossy, tmp_path, monkeypatch):
     real = wi.set_top_level
     calls = []
 
-    def second_fails(ch_dir, key, value):
+    def second_fails(char_dir, key, value):
         calls.append(key)
         if len(calls) == 2:
             raise OSError("disk full")
-        real(ch_dir, key, value)
+        real(char_dir, key, value)
 
     monkeypatch.setattr(wi, "set_top_level", second_fails)
     with pytest.raises(OSError):

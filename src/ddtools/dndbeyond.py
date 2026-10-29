@@ -9,11 +9,16 @@ import http.client
 import json
 import re
 import urllib.error
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 from urllib.request import Request, urlopen
 
 from ddtools.errors import DdtoolsError
+
+if TYPE_CHECKING:
+    from ddtools.config import Character, PathLike
 
 API = "https://character-service.dndbeyond.com/character/v5/character/{id}"
 ABILITIES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
@@ -42,6 +47,64 @@ class SnapshotError(DndBeyondError):
 
 class BadCharacterId(DdtoolsError, ValueError):
     """Text that isn't a D&D Beyond character id or URL."""
+
+
+class ClassSummary(TypedDict):
+    name: str
+    level: int
+    subclass: str | None
+
+
+class ItemSummary(TypedDict):
+    name: str
+    magic: bool
+    equipped: bool
+    attuned: bool
+    quantity: int
+
+
+class SheetSummary(TypedDict):
+    """The parts of a sheet the documents depend on (``summarise``)."""
+
+    name: str | None
+    classes: list[ClassSummary]
+    level: int
+    hp_base: int | None
+    stats: dict[str, int]
+    spells: dict[str, list[str]]  # source -> spell names
+    options: list[str]
+    feats: list[str]
+    items: list[ItemSummary]
+    gold: dict[str, int]
+
+
+class PartyEntry(TypedDict):
+    """One member in ``party.json`` (``party_entry``)."""
+
+    id: int | None
+    name: str | None
+    level: int
+    classes: list[str]
+    gender: str | None
+
+
+class PartyChange(TypedDict):
+    """A party member whose sheet changed since ``party.json``."""
+
+    name: str
+    before: PartyEntry | None  # None: new to the baseline
+    after: PartyEntry
+
+
+class WatchResult(TypedDict):
+    """What ``watch_character`` found for one character."""
+
+    character: str
+    dir: str  # the character's folder name
+    own: dict[str, Any] | None  # their sheet's ``diff``, if it changed meaningfully
+    party: list[PartyChange]
+    errors: list[str]
+    gold: NotRequired[dict[str, tuple[int, int]]]  # only when their sheet was compared
 
 
 def parse_id(text: str) -> int:
@@ -105,11 +168,11 @@ def _snapshot_key(path: Path) -> tuple[str, int]:
     return day, suffix
 
 
-def snapshot_dir(ch) -> Path:
+def snapshot_dir(ch: Character) -> Path:
     return Path(ch.dir) / "snapshots"
 
 
-def save_snapshot(ch, data: dict, today: str | None = None) -> Path:
+def save_snapshot(ch: Character, data: dict, today: str | None = None) -> Path:
     """Save to ``snapshots/YYYY-MM-DD.json`` (``-2``, ``-3``… if that day is taken)."""
     folder = snapshot_dir(ch)
     folder.mkdir(parents=True, exist_ok=True)
@@ -122,7 +185,7 @@ def save_snapshot(ch, data: dict, today: str | None = None) -> Path:
     return path
 
 
-def load_snapshot(path: Path):
+def load_snapshot(path: PathLike) -> Any:
     """The JSON in a saved snapshot (a sheet, or ``party.json``'s list).
 
     Raises:
@@ -136,7 +199,7 @@ def load_snapshot(path: Path):
         raise SnapshotError(f"{path}: can't read it as a snapshot ({err})") from err
 
 
-def latest_snapshots(ch, n: int = 2) -> list[Path]:
+def latest_snapshots(ch: Character, n: int = 2) -> list[Path]:
     """The newest ``n`` character snapshots, oldest first (``party.json`` excluded)."""
     files = [
         p
@@ -146,7 +209,7 @@ def latest_snapshots(ch, n: int = 2) -> list[Path]:
     return sorted(files, key=_snapshot_key)[-n:]
 
 
-def _names(entries) -> list[str]:
+def _names(entries: Any) -> list[str]:
     return sorted(
         e["definition"]["name"]
         for e in entries or []
@@ -155,12 +218,12 @@ def _names(entries) -> list[str]:
 
 
 def _stats(data: dict) -> dict[str, int]:
-    def by_id(key):
+    def by_id(key: str) -> dict:
         return {s["id"]: s.get("value") for s in data.get(key) or []}
 
     base, bonus, override = by_id("stats"), by_id("bonusStats"), by_id("overrideStats")
     mods = [m for group in (data.get("modifiers") or {}).values() for m in group or []]
-    out = {}
+    out: dict[str, int] = {}
     for i, (abbr, subtype) in enumerate(zip(ABILITIES, _SCORE_SUBTYPES, strict=True), 1):
         if override.get(i):
             out[abbr] = override[i]
@@ -174,9 +237,9 @@ def _stats(data: dict) -> dict[str, int]:
     return out
 
 
-def summarise(data: dict) -> dict:
+def summarise(data: dict) -> SheetSummary:
     """The parts of a sheet the documents depend on, in a stable, comparable shape."""
-    classes = [
+    classes: list[ClassSummary] = [
         {
             "name": c["definition"]["name"],
             "level": c.get("level", 0),
@@ -195,7 +258,7 @@ def summarise(data: dict) -> dict:
         if names:
             spells[label] = sorted(set(spells.get(label, [])) | set(names))
     options = sorted(n for group in (data.get("options") or {}).values() for n in _names(group))
-    items = sorted(
+    items: list[ItemSummary] = sorted(
         (
             {
                 "name": i["definition"]["name"],
@@ -223,12 +286,12 @@ def summarise(data: dict) -> dict:
     }
 
 
-def class_label(c: dict) -> str:
+def class_label(c: ClassSummary) -> str:
     """``Warlock 2 (The Fiend)`` from a summarised class entry."""
     return f"{c['name']} {c['level']}" + (f" ({c['subclass']})" if c["subclass"] else "")
 
 
-def party_entry(data: dict) -> dict:
+def party_entry(data: dict) -> PartyEntry:
     s = summarise(data)
     return {
         "id": data.get("id"),
@@ -240,16 +303,17 @@ def party_entry(data: dict) -> dict:
     }
 
 
-def _list_diff(old: list, new: list) -> tuple[list, list]:
+def _list_diff(old: list[str], new: list[str]) -> tuple[list[str], list[str]]:
     return sorted(set(new) - set(old)), sorted(set(old) - set(new))
 
 
 def diff(old: dict, new: dict) -> dict:
     """What changed between two sheets. Unchanged parts are empty (or ``None``)."""
     a, b = summarise(old), summarise(new)
-    out: dict = {"level": (a["level"], b["level"]) if a["level"] != b["level"] else None}
+    out: dict[str, Any] = {"level": (a["level"], b["level"]) if a["level"] != b["level"] else None}
     out["classes"] = (a["classes"], b["classes"]) if a["classes"] != b["classes"] else None
-    added, removed = {}, {}
+    added: dict[str, list[str]] = {}
+    removed: dict[str, list[str]] = {}
     for src in sorted(set(a["spells"]) | set(b["spells"])):
         plus, minus = _list_diff(a["spells"].get(src, []), b["spells"].get(src, []))
         if plus:
@@ -296,14 +360,15 @@ def is_meaningful(d: dict) -> bool:
     return any(d.get(k) for k in MEANINGFUL)
 
 
-def watch_character(ch, fetch=None) -> dict:
+def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -> WatchResult:
     """Compare live sheets with the committed baselines for one character and its party.
 
     Never raises for a fetch or a bad file: problems go into ``result["errors"]``.
     """
     fetch = fetch or fetch_character
-    result: dict = {"character": ch.name, "dir": Path(ch.dir).name, "own": None, "party": []}
-    result["errors"] = []
+    result: WatchResult = {
+        "character": ch.name, "dir": Path(ch.dir).name, "own": None, "party": [], "errors": [],
+    }  # fmt: skip
     snaps = latest_snapshots(ch, 1)
     if ch.dndbeyond_id:
         try:
@@ -350,7 +415,7 @@ def watch_character(ch, fetch=None) -> dict:
     return result
 
 
-def issue_markdown(result: dict) -> tuple[str, str]:
+def issue_markdown(result: WatchResult) -> tuple[str, str]:
     """Title and body for the GitHub issue raised when a watch finds changes."""
     name, folder = result["character"], result["dir"]
     lines = [f"The daily D&D Beyond check found changes for **{name}**.", ""]

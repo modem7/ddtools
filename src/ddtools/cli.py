@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from ddtools import __version__
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ddtools.config import Character
+    from ddtools.dndbeyond import SheetSummary
 
 Handler = Callable[[argparse.Namespace], int]
 _COMMANDS: list[tuple[str, str, Callable[[argparse.ArgumentParser], None], Handler]] = []
@@ -136,7 +143,7 @@ def cmd_golden(args: argparse.Namespace) -> int:
     return 0
 
 
-def _golden_check(ch, dest) -> int:
+def _golden_check(ch: Character, dest: Path) -> int:
     """Rebuild into a temporary folder and compare every document with its baseline."""
     import tempfile
     from pathlib import Path
@@ -241,7 +248,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _format_summary(s: dict) -> str:
+def _format_summary(s: SheetSummary) -> str:
     from ddtools.dndbeyond import class_label
 
     lines = [

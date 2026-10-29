@@ -7,11 +7,15 @@ pointing at a module with ``register(api)``. ddtools knows nothing else about it
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ddtools.config import Character
 
 ENTRY_GROUP = "ddtools.plugins"
 
 # A sheet-text block: (character, names of the party still in it) -> text for {{name}}.
-Block = Callable[[object, list[str]], str]
+Block = Callable[["Character", list[str]], str]
 
 _blocks: dict[str, Block] = {}
 _commands: list[str] = []

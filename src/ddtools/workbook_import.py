@@ -13,8 +13,9 @@ import html
 import re
 from datetime import date
 from pathlib import Path
+from typing import Literal, TypedDict
 
-from ddtools.config import FILENAME, load_character, set_top_level
+from ddtools.config import FILENAME, Character, PathLike, load_character, set_top_level
 from ddtools.dndbeyond import parse_id
 from ddtools.errors import DdtoolsError
 
@@ -26,7 +27,26 @@ class NotAWorkbook(DdtoolsError):
     """The file isn't there, isn't a PDF, or isn't a ddtools workbook."""
 
 
-def read_fields(pdf: Path) -> list[dict]:
+class WorkbookField(TypedDict):
+    """One form field read back from a workbook."""
+
+    name: str
+    section: int
+    label: str
+    kind: Literal["text", "tick"]
+    value: str | bool  # text for a write-in, True/False for a tick box
+
+
+class ImportResult(TypedDict):
+    """What ``import_workbook`` did."""
+
+    answers: Path
+    filled: list[str]
+    differences: list[str]
+    blank: list[str]
+
+
+def read_fields(pdf: PathLike) -> list[WorkbookField]:
     """The workbook's fields in order: ``{name, section, label, kind, value}``.
 
     Raises:
@@ -40,12 +60,12 @@ def read_fields(pdf: Path) -> list[dict]:
         fields = pypdf.PdfReader(str(pdf)).get_fields() or {}
     except pypdf.errors.PyPdfError as err:
         raise NotAWorkbook(f"{pdf}: can't read it as a PDF ({err})") from err
-    out = []
+    out: list[WorkbookField] = []
     for name, f in fields.items():
         m = _NAME.match(name)
         if not m:
             continue
-        kind = "tick" if f.get("/FT") == "/Btn" else "text"
+        kind: Literal["text", "tick"] = "tick" if f.get("/FT") == "/Btn" else "text"
         raw = f.get("/V")
         value = str(raw) not in ("None", "/Off", "") if kind == "tick" else str(raw or "").strip()
         out.append({"name": name, "section": int(m.group(1)), "label": str(f.get("/TU") or name),
@@ -55,14 +75,14 @@ def read_fields(pdf: Path) -> list[dict]:
     return out
 
 
-def _titles(ch) -> dict[int, str]:
+def _titles(ch: Character) -> dict[int, str]:
     from ddtools import workbook as W
 
     W.story(ch)
     return {n: html.unescape(t) for n, t in W.TITLES.items()}
 
 
-def answers_markdown(ch, fields: list[dict], source: str) -> str:
+def answers_markdown(ch: Character, fields: list[WorkbookField], source: str) -> str:
     titles = _titles(ch)
     out = [f"# Workbook answers: {ch.name}", "",
            f"Imported from `{source}` on {date.today().isoformat()} by `ddtools import-workbook`.",
@@ -78,16 +98,17 @@ def answers_markdown(ch, fields: list[dict], source: str) -> str:
                 out.append(f"- [x] {f['label']}")
             continue
         out += ["", f"**{f['label']}**", ""]
-        out.append(f["value"] if f["value"] else "*(blank)*")
+        out.append(str(f["value"]) if f["value"] else "*(blank)*")
     return "\n".join(out) + "\n"
 
 
-def _answer(fields, prefix: str) -> str:
-    return next((f["value"] for f in fields if f["name"].startswith(prefix)), "")
+def _answer(fields: list[WorkbookField], prefix: str) -> str:
+    """The first text field whose name starts with ``prefix`` ("" if none)."""
+    return next((str(f["value"]) for f in fields if f["name"].startswith(prefix)), "")
 
 
-def import_workbook(pdf: Path, dir: Path) -> dict:
-    """Import ``pdf`` into the character at ``dir``. Returns what was written, filled,
+def import_workbook(pdf: PathLike, char_dir: PathLike) -> ImportResult:
+    """Import ``pdf`` into the character at ``char_dir``. Returns what was written, filled,
     left alone (differences) and what's still blank.
 
     All or nothing: everything is read and worked out first. If writing the answers file
@@ -96,10 +117,10 @@ def import_workbook(pdf: Path, dir: Path) -> dict:
 
     Raises:
         NotAWorkbook: ``pdf`` is missing, unreadable or not a ddtools workbook.
-        ConfigError: ``dir`` isn't a valid character folder.
+        ConfigError: ``char_dir`` isn't a valid character folder.
         OSError: a write failed (after the rollback).
     """
-    ch = load_character(dir)
+    ch = load_character(char_dir)
     fields = read_fields(pdf)
     target = ch.dir / ANSWERS
     if target.exists():
@@ -110,7 +131,9 @@ def import_workbook(pdf: Path, dir: Path) -> dict:
             n += 1
     answers = answers_markdown(ch, fields, Path(pdf).name)
 
-    sets, filled, differences = [], [], []
+    sets: list[tuple[str, str | int]] = []
+    filled: list[str] = []
+    differences: list[str] = []
     name = _answer(fields, "v1.s1.character-name")
     if name and name != ch.name:
         differences.append(f"name: the workbook says '{name}', character.yaml says '{ch.name}'")

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-from ddtools.config import load_character
+from ddtools.config import PathLike, load_character
 from ddtools.errors import DdtoolsError
 from ddtools.textdump import write_text_copy
 
@@ -21,24 +20,18 @@ class BuildError(DdtoolsError):
         self.stderr = stderr
 
 
-def build_character(dir: Path, out: Path | None = None) -> list[Path]:
+def build_character(char_dir: PathLike, out: PathLike | None = None) -> list[Path]:
     """Run every document script in order; stop at the first failure.
 
-    PDFs go to ``out`` (default ``<dir>/pdf``), each with a ``.txt`` text copy.
+    PDFs go to ``out`` (default ``<char_dir>/pdf``), each with a ``.txt`` text copy.
     """
-    ch = load_character(dir)
+    ch = load_character(char_dir)
     # Scripts run with cwd=src/, so a relative --out must be resolved here.
     out_dir = Path(out).resolve() if out else ch.dir / "pdf"
     env = {**os.environ, "DDTOOLS_CHARACTER_DIR": str(ch.dir), "DDTOOLS_OUT": str(out_dir)}
     built = []
     for doc in ch.documents:
-        # "ddtools:<name>" is a document ddtools builds itself (e.g. ddtools:workbook).
-        if doc.script.startswith("ddtools:"):
-            script = Path(doc.script)
-            cmd, cwd = [sys.executable, "-m", f"ddtools.{doc.script.split(':', 1)[1]}"], ch.dir
-        else:
-            script = ch.dir / doc.script
-            cmd, cwd = [sys.executable, str(script)], script.parent
+        script, cmd, cwd = doc.command(ch.dir)
         pdf = out_dir / Path(doc.file).name
         before = pdf.stat().st_mtime_ns if pdf.exists() else None
         run = subprocess.run(
