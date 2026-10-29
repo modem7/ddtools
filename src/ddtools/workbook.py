@@ -15,7 +15,6 @@ Run as a document script: ``script: ddtools:workbook`` in ``character.yaml``.
 
 from __future__ import annotations
 
-import html
 import textwrap
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -949,11 +948,6 @@ SECTIONS = [
         skip="you have none. You can always add them later.",
     ),
 ]
-
-
-def section_titles(ch: Character) -> dict[int, str]:
-    """Section number -> title, as plain text (0 is the cover, "Start"). Builds nothing."""
-    return {0: "Start"} | {s.num: html.unescape(s.name) for s in SECTIONS}
 
 
 def story(ch: Character) -> list[Flowable]:

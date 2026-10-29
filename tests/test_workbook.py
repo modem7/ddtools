@@ -54,21 +54,36 @@ def test_every_field_has_a_stable_versioned_name_and_its_label(mossy):
     assert list(again) == names, "the same workbook gets the same names"
 
 
-def test_section_titles_are_plain_text_and_build_nothing(mossy, monkeypatch):
-    def no_story(ch):
-        raise AssertionError("section_titles must not build the workbook")
+def test_section_titles_are_plain_text(mossy):
+    from ddtools.workbook_fields import SECTION_TITLES
 
-    monkeypatch.setattr(W, "story", no_story)
-    ch = load_character(mossy)
-    titles = W.section_titles(ch)
-    assert titles[0] == "Start" and titles[1] == "The Basics"
-    assert titles[5] == "Build & Levelling", "plain text, not markup"
-    assert list(titles) == list(range(14)), "the cover and sections 1 to 13, in order"
+    assert SECTION_TITLES[0] == "Start" and SECTION_TITLES[1] == "The Basics"
+    assert SECTION_TITLES[5] == "Build & Levelling", "plain text, not markup"
+    assert list(SECTION_TITLES) == list(range(14)), "the cover and sections 1 to 13, in order"
 
     from ddtools.workbook_import import answers_markdown
 
     fields = [{"name": "v1.s5.x", "section": 5, "label": "X", "kind": "text", "value": "y"}]
+    ch = load_character(mossy)
     assert "## 5. Build & Levelling" in answers_markdown(ch, fields, "filled.pdf")
+
+
+def test_section_titles_match_the_workbook_headings():
+    import html
+
+    from ddtools.workbook_fields import SECTION_TITLES
+
+    assert {s.num: html.unescape(s.name) for s in W.SECTIONS} == {
+        n: t for n, t in SECTION_TITLES.items() if n
+    }
+
+
+def test_importing_a_workbook_does_not_load_the_builder():
+    import subprocess
+    import sys
+
+    code = "import sys, ddtools.workbook_import; sys.exit('ddtools.workbook' in sys.modules)"
+    assert subprocess.run([sys.executable, "-c", code]).returncode == 0
 
 
 def test_ddtools_workbook_writes_it(mossy, capsys):

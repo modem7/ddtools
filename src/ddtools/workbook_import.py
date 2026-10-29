@@ -16,7 +16,7 @@ from typing import Literal, TypedDict
 from ddtools.config import FILENAME, Character, PathLike, load_character, set_top_level
 from ddtools.dndbeyond import parse_id
 from ddtools.errors import DdtoolsError
-from ddtools.workbook_fields import field_key, section_of
+from ddtools.workbook_fields import SECTION_TITLES, field_key, section_of
 
 ANSWERS = "notes/sources/workbook-answers.md"
 
@@ -74,9 +74,6 @@ def read_fields(pdf: PathLike) -> list[WorkbookField]:
 
 
 def answers_markdown(ch: Character, fields: list[WorkbookField], source: str) -> str:
-    from ddtools.workbook import section_titles
-
-    titles = section_titles(ch)
     out = [f"# Workbook answers: {ch.name}", "",
            f"Imported from `{source}` on {date.today().isoformat()} by `ddtools import-workbook`.",
            "Verbatim: nothing here has been edited."]  # fmt: skip
@@ -84,7 +81,7 @@ def answers_markdown(ch: Character, fields: list[WorkbookField], source: str) ->
     for f in fields:
         if f["section"] != section:
             section = f["section"]
-            title = titles.get(section, "")
+            title = SECTION_TITLES.get(section, "")
             out += ["", f"## {section}. {title}" if section else f"## {title or 'Start'}"]
         if f["kind"] == "tick":
             if f["value"]:
