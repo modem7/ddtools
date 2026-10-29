@@ -229,7 +229,7 @@ def load_character(char_dir: PathLike | None = None) -> Character:
         campaign=campaign,
         documents=docs,
         secrets_file=data.get("secrets_file", "secrets.txt"),
-        retired=retired,
+        retired=cast("Retirement | None", retired),
         extra={k: v for k, v in data.items() if k not in KNOWN_KEYS},
         party_summary=data.get("party_summary", ""),
     )

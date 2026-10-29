@@ -33,7 +33,7 @@ where = ["src"]
 include = ["ddtools*"]
 
 [tool.setuptools.package-data]
-ddtools = ["data/*.txt", "blueprints/*.md", "repo_template/**/*", "character_template/**/*", "fonts/*"]
+ddtools = ["data/*.txt", "blueprints/*.md", "repo_template/**/*", "character_template/**/*", "fonts/*", "py.typed"]
 
 [tool.ruff]
 line-length = 100
@@ -51,6 +51,16 @@ known-local-folder = ["conftest"]
 "src/ddtools/character_template/**" = ["E501", "F403", "F405"]
 # Long prose, like the build scripts.
 "src/ddtools/workbook.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src/ddtools"]
+exclude = ["src/ddtools/character_template/"]
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["reportlab.*", "pypdfium2.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

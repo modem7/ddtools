@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from ddtools.config import PathLike
-    from ddtools.dndbeyond import SheetDiff, SheetSummary
+    from ddtools.dndbeyond import ListDiffKey, SheetDiff, SheetSummary
 
 
 def print_json(data: Any) -> None:
@@ -51,12 +51,13 @@ def format_diff(d: SheetDiff) -> list[str]:
         lines.append(f"Spells added ({src}): {', '.join(names)}")
     for src, names in d["spells_removed"].items():
         lines.append(f"Spells removed ({src}): {', '.join(names)}")
-    for key, label in [
+    list_labels: list[tuple[ListDiffKey, str]] = [
         ("options_added", "Options added"), ("options_removed", "Options removed"),
         ("feats_added", "Feats added"), ("feats_removed", "Feats removed"),
         ("items_added", "Magic items added"), ("items_removed", "Magic items removed"),
         ("attunement_changed", "Attunement/equipped changed"),
-    ]:  # fmt: skip
+    ]  # fmt: skip
+    for key, label in list_labels:
         if d[key]:
             lines.append(f"{label}: {', '.join(d[key])}")
     for k, (a, b) in d["stats"].items():

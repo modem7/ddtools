@@ -107,7 +107,7 @@ def locate_headings(pages: list[str], headings: list[tuple[str, str]]) -> list[H
     return result
 
 
-def _render(pdf: Path, index: int) -> Image.Image:
+def _render(pdf: PathLike, index: int) -> Image.Image:
     return render_page(pdf, index, SCALE).convert("L")
 
 
