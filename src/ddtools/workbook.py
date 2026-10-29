@@ -22,7 +22,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from ddtools.config import Character, is_present, load_character, output_path, updated_label
+from ddtools.config import (
+    Character,
+    PartyMember,
+    is_present,
+    load_character,
+    output_path,
+    updated_label,
+)
 from ddtools.pdfstyle import (
     ACCENT,
     MUTED,
@@ -70,7 +77,7 @@ class _Workbook:
 
     ch: Character
     options: dict[str, Any]  # campaign.workbook
-    party: list[dict[str, Any]]  # teammates still in the party
+    party: list[PartyMember]  # teammates still in the party
     section: int = 0
 
     @classmethod

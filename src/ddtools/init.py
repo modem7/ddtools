@@ -17,10 +17,14 @@ import re
 from datetime import date
 from importlib.resources import files
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from ddtools import __version__
+
+if TYPE_CHECKING:
+    from ddtools.config import PathLike
 
 MARKER = ".ddtools-init.yaml"
 
@@ -71,7 +75,7 @@ def _previous(dest: Path) -> dict | None:
     return old if isinstance(old, dict) else None
 
 
-def init_repo(dest: Path | str, owner: str, name: str | None = None, *, public: bool = False,
+def init_repo(dest: PathLike, owner: str, name: str | None = None, *, public: bool = False,
               template: bool = False, extends: bool = False,
               funding: str | None = None) -> dict[str, list[str]]:  # fmt: skip
     """Write the campaign repo's files into ``dest``.

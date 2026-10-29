@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from dataclasses import fields as dataclass_fields
 from datetime import date
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast, get_args
+from typing import Any, Literal, NotRequired, TypedDict, cast, get_args
 
 import yaml
 
@@ -42,6 +42,15 @@ class Retirement(TypedDict):
     date: date
     reason: str
     note: str
+
+
+class PartyMember(TypedDict):
+    """One ``campaign.party`` entry. Other keys are kept for the campaign's own scripts."""
+
+    name: str
+    dndbeyond_id: NotRequired[int | None]
+    status: NotRequired[str]
+    summary: NotRequired[str]
 
 
 @dataclass
@@ -220,7 +229,7 @@ def load_character(char_dir: PathLike | None = None) -> Character:
         campaign=campaign,
         documents=docs,
         secrets_file=data.get("secrets_file", "secrets.txt"),
-        retired=retired,
+        retired=cast("Retirement | None", retired),
         extra={k: v for k, v in data.items() if k not in KNOWN_KEYS},
         party_summary=data.get("party_summary", ""),
     )
@@ -436,7 +445,7 @@ def set_party_fields(char_dir: PathLike, name: str, fields: dict) -> None:
     _write_party(char_dir, plan)
 
 
-def add_party_member(char_dir: PathLike, entry: dict) -> None:
+def add_party_member(char_dir: PathLike, entry: PartyMember) -> None:
     """Append a member (``entry`` has ``name`` first) to the party list.
 
     Raises:
@@ -455,7 +464,7 @@ def add_party_member(char_dir: PathLike, entry: dict) -> None:
 # ---- who is in the party (for the documents) ------------------------------------------
 
 
-def party_member(ch: Character, name: str) -> dict | None:
+def party_member(ch: Character, name: str) -> PartyMember | None:
     """The party entry called ``name``, or whose first word is ``name`` ("Bramble" for
     "Bramble the Bold")."""
     for p in ch.campaign.get("party") or []:
@@ -474,12 +483,12 @@ def is_present(ch: Character, name: str) -> bool:
 present = is_present  # old name, kept for campaigns' own build scripts
 
 
-def absent_friends(ch: Character) -> list[dict]:
+def absent_friends(ch: Character) -> list[PartyMember]:
     """Teammates gone for good, in party-list order."""
     return [p for p in ch.campaign.get("party") or [] if p.get("status") == "gone"]
 
 
-def newcomers(ch: Character, known: list[str]) -> list[dict]:
+def newcomers(ch: Character, known: list[str]) -> list[PartyMember]:
     """Teammates in the party whose names the documents don't have their own text for yet."""
     return [
         p

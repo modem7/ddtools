@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed:** typing pass. Every public path parameter is a `PathLike`; `SheetDiff` and
+  `PartyMember` are `TypedDict`s; the package ships `py.typed`; CI runs mypy.
 - **Changed:** `load_character` checks each `documents:` entry (known fields, text and list
   types, and a `script` that stays inside the character folder) and the `retired:` block,
   and raises `ConfigError` naming the entry, not a `TypeError`. `add_party_member` raises

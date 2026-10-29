@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ddtools.dndbeyond import SheetSummary
+    from collections.abc import Sequence
+
+    from ddtools.config import PathLike
+    from ddtools.dndbeyond import ListDiffKey, SheetDiff, SheetSummary
 
 
 def print_json(data: Any) -> None:
@@ -39,7 +42,7 @@ def format_summary(s: SheetSummary) -> str:
     return "\n".join(lines)
 
 
-def format_diff(d: dict) -> list[str]:
+def format_diff(d: SheetDiff) -> list[str]:
     """One line per change in a ``dndbeyond.diff`` result; empty if nothing changed."""
     lines = []
     if d["level"]:
@@ -48,12 +51,13 @@ def format_diff(d: dict) -> list[str]:
         lines.append(f"Spells added ({src}): {', '.join(names)}")
     for src, names in d["spells_removed"].items():
         lines.append(f"Spells removed ({src}): {', '.join(names)}")
-    for key, label in [
+    list_labels: list[tuple[ListDiffKey, str]] = [
         ("options_added", "Options added"), ("options_removed", "Options removed"),
         ("feats_added", "Feats added"), ("feats_removed", "Feats removed"),
         ("items_added", "Magic items added"), ("items_removed", "Magic items removed"),
         ("attunement_changed", "Attunement/equipped changed"),
-    ]:  # fmt: skip
+    ]  # fmt: skip
+    for key, label in list_labels:
         if d[key]:
             lines.append(f"{label}: {', '.join(d[key])}")
     for k, (a, b) in d["stats"].items():
@@ -65,7 +69,7 @@ def format_diff(d: dict) -> list[str]:
     return lines
 
 
-def diff_report(old_name: str, new_name: str, d: dict) -> str:
+def diff_report(old_name: str, new_name: str, d: SheetDiff) -> str:
     """The ``ddtools diff`` text: the two snapshot names, the changes, then a level-up checklist."""
     from ddtools.dndbeyond import LEVELUP_CHECKLIST
 
@@ -77,7 +81,9 @@ def diff_report(old_name: str, new_name: str, d: dict) -> str:
     return "\n".join(out)
 
 
-def run_watch(dirs: list[str], as_json: bool = False, issue_dir: str | None = None) -> int:
+def run_watch(
+    dirs: Sequence[PathLike], as_json: bool = False, issue_dir: PathLike | None = None
+) -> int:
     """Compare live sheets with the snapshots and print (and write) what changed.
 
     ``dirs`` empty means every character under the current folder; only active ones

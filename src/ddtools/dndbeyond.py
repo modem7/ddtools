@@ -12,7 +12,7 @@ import urllib.error
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict, get_args
 from urllib.request import Request, urlopen
 
 from ddtools.errors import DdtoolsError
@@ -96,12 +96,31 @@ class PartyChange(TypedDict):
     after: PartyEntry
 
 
+class SheetDiff(TypedDict):
+    """What changed between two sheets (``diff``); unchanged parts are empty or ``None``."""
+
+    level: tuple[int, int] | None
+    classes: tuple[list[ClassSummary], list[ClassSummary]] | None
+    spells_added: dict[str, list[str]]
+    spells_removed: dict[str, list[str]]
+    options_added: list[str]
+    options_removed: list[str]
+    feats_added: list[str]
+    feats_removed: list[str]
+    items_added: list[str]
+    items_removed: list[str]
+    attunement_changed: list[str]
+    stats: dict[str, tuple[int, int]]
+    hp_base: tuple[int | None, int | None] | None
+    gold: dict[str, tuple[int, int]]
+
+
 class WatchResult(TypedDict):
     """What ``watch_character`` found for one character."""
 
     character: str
     dir: str  # the character's folder name
-    own: dict[str, Any] | None  # their sheet's ``diff``, if it changed meaningfully
+    own: SheetDiff | None  # their sheet's ``diff``, if it changed meaningfully
     party: list[PartyChange]
     errors: list[str]
     gold: NotRequired[dict[str, tuple[int, int]]]  # only when their sheet was compared
@@ -307,11 +326,11 @@ def _list_diff(old: list[str], new: list[str]) -> tuple[list[str], list[str]]:
     return sorted(set(new) - set(old)), sorted(set(old) - set(new))
 
 
-def diff(old: dict, new: dict) -> dict:
+def diff(old: dict, new: dict) -> SheetDiff:
     """What changed between two sheets. Unchanged parts are empty (or ``None``)."""
     a, b = summarise(old), summarise(new)
-    out: dict[str, Any] = {"level": (a["level"], b["level"]) if a["level"] != b["level"] else None}
-    out["classes"] = (a["classes"], b["classes"]) if a["classes"] != b["classes"] else None
+    level = (a["level"], b["level"]) if a["level"] != b["level"] else None
+    classes = (a["classes"], b["classes"]) if a["classes"] != b["classes"] else None
     added: dict[str, list[str]] = {}
     removed: dict[str, list[str]] = {}
     for src in sorted(set(a["spells"]) | set(b["spells"])):
@@ -320,42 +339,55 @@ def diff(old: dict, new: dict) -> dict:
             added[src] = plus
         if minus:
             removed[src] = minus
-    out["spells_added"], out["spells_removed"] = added, removed
-    out["options_added"], out["options_removed"] = _list_diff(a["options"], b["options"])
-    out["feats_added"], out["feats_removed"] = _list_diff(a["feats"], b["feats"])
+    options_added, options_removed = _list_diff(a["options"], b["options"])
+    feats_added, feats_removed = _list_diff(a["feats"], b["feats"])
     magic_a = {i["name"]: i for i in a["items"] if i["magic"]}
     magic_b = {i["name"]: i for i in b["items"] if i["magic"]}
-    out["items_added"], out["items_removed"] = _list_diff(list(magic_a), list(magic_b))
-    out["attunement_changed"] = sorted(
+    items_added, items_removed = _list_diff(list(magic_a), list(magic_b))
+    attunement_changed = sorted(
         n
         for n in set(magic_a) & set(magic_b)
         if (magic_a[n]["attuned"], magic_a[n]["equipped"])
         != (magic_b[n]["attuned"], magic_b[n]["equipped"])
     )
-    out["stats"] = {
-        k: (a["stats"][k], b["stats"][k]) for k in ABILITIES if a["stats"][k] != b["stats"][k]
-    }
-    out["hp_base"] = (a["hp_base"], b["hp_base"]) if a["hp_base"] != b["hp_base"] else None
-    out["gold"] = {
+    stats = {k: (a["stats"][k], b["stats"][k]) for k in ABILITIES if a["stats"][k] != b["stats"][k]}
+    hp_base = (a["hp_base"], b["hp_base"]) if a["hp_base"] != b["hp_base"] else None
+    gold = {
         k: (a["gold"].get(k, 0), b["gold"].get(k, 0))
         for k in ("pp", "gp", "ep", "sp", "cp")
         if a["gold"].get(k, 0) != b["gold"].get(k, 0)
     }
-    return out
+    return {
+        "level": level,
+        "classes": classes,
+        "spells_added": added,
+        "spells_removed": removed,
+        "options_added": options_added,
+        "options_removed": options_removed,
+        "feats_added": feats_added,
+        "feats_removed": feats_removed,
+        "items_added": items_added,
+        "items_removed": items_removed,
+        "attunement_changed": attunement_changed,
+        "stats": stats,
+        "hp_base": hp_base,
+        "gold": gold,
+    }
 
 
 # ---- watch ---------------------------------------------------------------
 
 # Diff keys holding a plain list of names.
-LIST_DIFFS = (
+ListDiffKey = Literal[
     "options_added", "options_removed", "feats_added", "feats_removed",
     "items_added", "items_removed", "attunement_changed",
-)  # fmt: skip
+]  # fmt: skip
+LIST_DIFFS: tuple[ListDiffKey, ...] = get_args(ListDiffKey)
 _PARTY_KEYS = {"id", "name", "level", "classes"}  # what watch compares in party.json
 MEANINGFUL = ("level", "classes", "spells_added", "spells_removed", *LIST_DIFFS, "stats", "hp_base")
 
 
-def is_meaningful(d: dict) -> bool:
+def is_meaningful(d: SheetDiff) -> bool:
     """True if a diff has anything beyond gold/consumables worth an update session."""
     return any(d.get(k) for k in MEANINGFUL)
 
@@ -431,12 +463,17 @@ def issue_markdown(result: WatchResult) -> tuple[str, str]:
             lines.append(f"- Level: {own['level'][0]} → {own['level'][1]}")
         if own["classes"]:
             lines.append(f"- Classes now: {', '.join(class_label(c) for c in own['classes'][1])}")
-        for label, key in [("Spells added", "spells_added"), ("Spells removed", "spells_removed")]:
+        spell_diffs: list[tuple[str, Literal["spells_added", "spells_removed"]]] = [
+            ("Spells added", "spells_added"),
+            ("Spells removed", "spells_removed"),
+        ]
+        for label, key in spell_diffs:
             for src, names in own[key].items():
                 lines.append(f"- {label} ({src}): {', '.join(names)}")
-        for key in LIST_DIFFS:
-            if own[key]:
-                lines.append(f"- {key.replace('_', ' ').capitalize()}: {', '.join(own[key])}")
+        for list_key in LIST_DIFFS:
+            if own[list_key]:
+                text = ", ".join(own[list_key])
+                lines.append(f"- {list_key.replace('_', ' ').capitalize()}: {text}")
         for k, (a, b) in own["stats"].items():
             lines.append(f"- {k}: {a} → {b}")
         if own["hp_base"]:
