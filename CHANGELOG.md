@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Changed:** `ddtools.workbook` no longer re-exports the `ddtools.pdfstyle` names it
+  imported (`A4`, `EMBER`, `FIELD_BG`, `HEAD_BG`, `INK`, `NOTE_BG`, `RULE`, `FontsMissing`,
+  `Paragraph`, `Preformatted`, `SimpleDocTemplate`, `TTFont`, `TableStyle`, `bullet`,
+  `mono`, `smallb`, `make_footer`). Import them from `ddtools.pdfstyle` instead.
+- **Changed:** `sheet-text` and `workbook` report a corrupt snapshot, a bad
+  `dndbeyond.yaml` or missing fonts as a message (exit code 1), not a traceback.
+
 - **Changed:** the runtime dependencies now have version bounds: at least the versions
   ddtools is tested with, and below the next major version.
 

@@ -8,7 +8,6 @@ provides it. The result is compared with the latest snapshot and checked against
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -81,7 +80,13 @@ def load_source(char_dir: PathLike) -> dict:
     path = Path(char_dir) / SOURCE_FILE
     if not path.is_file():
         raise SheetTextError(f"{path}: not found (see tools/README.md, “D&D Beyond text”)")
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as err:
+        raise SheetTextError(f"{path}: not valid YAML ({err})") from err
+    if not isinstance(data, dict):
+        raise SheetTextError(f"{path}: should hold a mapping of fields, not a list or text")
+    return data
 
 
 def party_names(ch: Character) -> list[str]:
@@ -135,7 +140,7 @@ def _latest_snapshot(ch: Character) -> tuple[str | None, dict]:
     snaps = ddb.latest_snapshots(ch, 1)
     if not snaps:
         return None, {}
-    return snaps[-1].name, json.loads(snaps[-1].read_text(encoding="utf-8"))
+    return snaps[-1].name, ddb.load_snapshot(snaps[-1])
 
 
 def _terms(text: str, secrets: list[Secret]) -> list[str]:
