@@ -9,8 +9,6 @@ hand (by Claude, from the blueprints), never generated from here.
 
 from __future__ import annotations
 
-import html
-import re
 from datetime import date
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -18,9 +16,9 @@ from typing import Literal, TypedDict
 from ddtools.config import FILENAME, Character, PathLike, load_character, set_top_level
 from ddtools.dndbeyond import parse_id
 from ddtools.errors import DdtoolsError
+from ddtools.workbook_fields import field_key, section_of
 
 ANSWERS = "notes/sources/workbook-answers.md"
-_NAME = re.compile(r"^v1\.s(\d+)\.")
 
 
 class NotAWorkbook(DdtoolsError):
@@ -62,28 +60,23 @@ def read_fields(pdf: PathLike) -> list[WorkbookField]:
         raise NotAWorkbook(f"{pdf}: can't read it as a PDF ({err})") from err
     out: list[WorkbookField] = []
     for name, f in fields.items():
-        m = _NAME.match(name)
-        if not m:
+        section = section_of(name)
+        if section is None:
             continue
         kind: Literal["text", "tick"] = "tick" if f.get("/FT") == "/Btn" else "text"
         raw = f.get("/V")
         value = str(raw) not in ("None", "/Off", "") if kind == "tick" else str(raw or "").strip()
-        out.append({"name": name, "section": int(m.group(1)), "label": str(f.get("/TU") or name),
+        out.append({"name": name, "section": section, "label": str(f.get("/TU") or name),
                     "kind": kind, "value": value})  # fmt: skip
     if not out:
         raise NotAWorkbook(f"{pdf}: not a ddtools workbook (it has no v1 workbook fields)")
     return out
 
 
-def _titles(ch: Character) -> dict[int, str]:
-    from ddtools import workbook as W
-
-    W.story(ch)
-    return {n: html.unescape(t) for n, t in W.TITLES.items()}
-
-
 def answers_markdown(ch: Character, fields: list[WorkbookField], source: str) -> str:
-    titles = _titles(ch)
+    from ddtools.workbook import section_titles
+
+    titles = section_titles(ch)
     out = [f"# Workbook answers: {ch.name}", "",
            f"Imported from `{source}` on {date.today().isoformat()} by `ddtools import-workbook`.",
            "Verbatim: nothing here has been edited."]  # fmt: skip
@@ -134,10 +127,10 @@ def import_workbook(pdf: PathLike, char_dir: PathLike) -> ImportResult:
     sets: list[tuple[str, str | int]] = []
     filled: list[str] = []
     differences: list[str] = []
-    name = _answer(fields, "v1.s1.character-name")
+    name = _answer(fields, field_key(1, "Character name"))
     if name and name != ch.name:
         differences.append(f"name: the workbook says '{name}', character.yaml says '{ch.name}'")
-    link = _answer(fields, "v1.s1.d-d-beyond-link")
+    link = _answer(fields, field_key(1, "D&D Beyond link"))
     if link:
         try:
             ddb = parse_id(link)
@@ -150,7 +143,7 @@ def import_workbook(pdf: PathLike, char_dir: PathLike) -> ImportResult:
             elif ch.dndbeyond_id != ddb:
                 differences.append(f"dndbeyond_id: the workbook says {ddb}, "
                                    f"character.yaml says {ch.dndbeyond_id}")  # fmt: skip
-    summary = _answer(fields, "v1.s1.race-class-subclass-level")
+    summary = _answer(fields, field_key(1, "Race / class / subclass / level"))
     if summary:
         if not ch.class_summary:
             sets.append(("class_summary", summary))

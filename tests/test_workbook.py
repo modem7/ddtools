@@ -54,6 +54,23 @@ def test_every_field_has_a_stable_versioned_name_and_its_label(mossy):
     assert list(again) == names, "the same workbook gets the same names"
 
 
+def test_section_titles_are_plain_text_and_build_nothing(mossy, monkeypatch):
+    def no_story(ch):
+        raise AssertionError("section_titles must not build the workbook")
+
+    monkeypatch.setattr(W, "story", no_story)
+    ch = load_character(mossy)
+    titles = W.section_titles(ch)
+    assert titles[0] == "Start" and titles[1] == "The Basics"
+    assert titles[5] == "Build & Levelling", "plain text, not markup"
+    assert list(titles) == list(range(14)), "the cover and sections 1 to 13, in order"
+
+    from ddtools.workbook_import import answers_markdown
+
+    fields = [{"name": "v1.s5.x", "section": 5, "label": "X", "kind": "text", "value": "y"}]
+    assert "## 5. Build & Levelling" in answers_markdown(ch, fields, "filled.pdf")
+
+
 def test_ddtools_workbook_writes_it(mossy, capsys):
     assert main(["workbook", str(mossy)]) == 0
     assert (mossy / "pdf" / W.FILE).exists()

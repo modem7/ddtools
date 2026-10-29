@@ -32,6 +32,8 @@ _STAMPS = [
 ]
 _HEADING = re.compile(r'P\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*(h1|h2)\s*\)')
 _SECTION = re.compile(r'\bsection\(\s*(\d+)\s*,\s*"((?:[^"\\]|\\.)*)"')
+# ``_Section(N, "Name", mins, builder, …)``: the workbook's table of sections.
+_SECTION_TUPLE = re.compile(r'\b_Section\(\s*(\d+)\s*,\s*"((?:[^"\\]|\\.)*)"\s*,\s*\d+\s*,\s*(\w+)')
 _TAG = re.compile(r"<[^>]+>")
 _BASELINE_KEYS = ("pages", "headings", "texts")
 
@@ -70,8 +72,10 @@ def _plain(markup: str) -> str:
 def headings_from_script(script: Path) -> list[tuple[str, str]]:
     """Every h1/h2 heading in a build script, in source order.
 
-    Recognises ``P("…", h1|h2)`` and the workbook's ``section(N, "Name", …)``
-    (rendered as ``"N. Name"``). f-string headings don't match and are skipped.
+    Recognises ``P("…", h1|h2)``, the old workbook's ``section(N, "Name", …)`` and
+    the new one's ``_Section(N, "Name", mins, builder, …)``, each rendered as
+    ``"N. Name"``. A ``_Section`` heading goes where ``def builder(`` is, since the
+    section table comes after the builders. f-string headings are skipped.
     """
     source = Path(script).read_text(encoding="utf-8")
     found: list[tuple[int, str, str]] = []
@@ -79,6 +83,10 @@ def headings_from_script(script: Path) -> list[tuple[str, str]]:
         found.append((m.start(), m.group(2), _plain(m.group(1))))
     for m in _SECTION.finditer(source):
         found.append((m.start(), "h1", f"{m.group(1)}. {_plain(m.group(2))}"))
+    for m in _SECTION_TUPLE.finditer(source):
+        builder = re.search(rf"^def {re.escape(m.group(3))}\(", source, re.MULTILINE)
+        at = builder.start() if builder else m.start()
+        found.append((at, "h1", f"{m.group(1)}. {_plain(m.group(2))}"))
     return [(level, text) for _, level, text in sorted(found)]
 
 
