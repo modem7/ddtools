@@ -50,7 +50,7 @@ __all__ = [
     "SimpleDocTemplate", "pdfmetrics", "TTFont",
     "ACCENT", "EMBER", "INK", "MUTED", "RULE", "HEAD_BG", "NOTE_BG", "WARN_BG", "FIELD_BG",
     "body", "small", "smallb", "title", "sub", "h1", "h2", "bullet", "mono",
-    "P", "bl", "table", "box", "code", "Field", "Ticks", "make_footer", "build",
+    "P", "bl", "table", "box", "todo", "code", "Field", "Ticks", "make_footer", "build",
     "FontsMissing",
 ]  # fmt: skip
 
@@ -166,6 +166,11 @@ def box(paras: Sequence[Flowable], bg: Color = NOTE_BG, edge: Color = EMBER) -> 
         )
     )
     return t
+
+
+def todo(text: str) -> Table:
+    """A guidance note: what goes in this section. Delete it once written."""
+    return box([P("<b>To write:</b> " + text, small)], bg=WARN_BG)
 
 
 def code(lines: Iterable[str]) -> Table:

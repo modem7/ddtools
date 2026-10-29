@@ -3,15 +3,10 @@
 Replace each guidance note with the real content. Keep the headings (or rename them
 in the blueprint too) so the document keeps the shape of the others."""
 
-from ddtools.config import load_character, output_path, rules_rows, stamp
+from ddtools.config import level_updated_label, load_character, output_path, rules_rows
 from ddtools.pdfstyle import *
 
 CH = load_character()
-
-
-def todo(text):
-    """A guidance note: what goes in this section. Delete it once written."""
-    return box([P("<b>To write:</b> " + text, small)], bg=WARN_BG)
 
 
 S = []
@@ -61,4 +56,8 @@ S.append(table(rules_rows(CH, "dm"), [128, 42]))
 S.append(P("Blanks for You to Fill", h2))
 S.append(todo("Names and details the DM owns."))
 
-build(S, output_path(CH, f"{CH.dir.name}_DM_Brief.pdf"), f"{CH.name} — DM brief · {stamp(CH)}")
+build(
+    S,
+    output_path(CH, f"{CH.dir.name}_DM_Brief.pdf"),
+    f"{CH.name} — DM brief · {level_updated_label(CH)}",
+)

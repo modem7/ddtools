@@ -118,9 +118,6 @@ def field_status(proposed: str | None, live: object) -> str:
     return "up to date" if _norm(proposed) == _norm(live) else "needs updating"
 
 
-status = field_status  # old name, kept for anyone importing it
-
-
 def blanks(text: str | None) -> list[str]:
     return re.findall(r"\[[^\]\n]+\]", text or "")
 

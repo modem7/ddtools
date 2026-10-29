@@ -127,5 +127,5 @@ def test_every_short_detail_is_checked(ash, key):
     assert any(key in p for p in T.report(load_character(ash))["problems"])
 
 
-def test_status_is_still_available_under_its_old_name():
-    assert T.status("New text", None) == T.field_status("New text", None) == "missing"
+def test_the_old_status_name_is_gone():
+    assert not hasattr(T, "status")

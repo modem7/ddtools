@@ -7,11 +7,11 @@ from ddtools.cli import main
 
 GOOD = textwrap.dedent(
     """
-    from ddtools.config import load_character, output_path, stamp
+    from ddtools.config import load_character, output_path, level_updated_label
     from ddtools.pdfstyle import P, build, h1
 
     CH = load_character()
-    build([P("Hello", h1)], output_path(CH, "Doc.pdf"), stamp(CH))
+    build([P("Hello", h1)], output_path(CH, "Doc.pdf"), level_updated_label(CH))
     """
 )
 
