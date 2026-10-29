@@ -442,14 +442,15 @@ def cmd_workbook(args: argparse.Namespace) -> int:
     from ddtools.config import load_character
     from ddtools.errors import DdtoolsError
     from ddtools.textdump import write_text_copy
-    from ddtools.workbook import build_workbook
 
     try:
+        from ddtools.workbook import build_workbook  # registers the fonts, so can raise
+
         ch = load_character(args.dir)
+        out = build_workbook(ch)
     except DdtoolsError as err:
         print(err)
         return 1
-    out = build_workbook(ch)
     write_text_copy(out)
     print(f"Wrote {out}")
     return 0

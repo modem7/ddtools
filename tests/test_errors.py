@@ -145,3 +145,37 @@ def test_compare_reports_broken_baselines(tmp_path):
     assert "a heading with no text or page" in compare(pdf, script, base)[0]
     (base / "Doc.json").write_text("{nope", encoding="utf-8")
     assert "can't read the baseline" in compare(pdf, script, base)[0]
+
+
+def test_sheet_text_reports_a_bad_snapshot(tmp_path, capsys):
+    ash = make_campaign(tmp_path)
+    (ash / "dndbeyond.yaml").write_text("details: {}\n", encoding="utf-8")
+    (ash / "snapshots" / "2026-02-01.json").write_text("{oops", encoding="utf-8")
+    assert main(["sheet-text", str(ash)]) == 1
+    assert "2026-02-01.json" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("text", ["details: [unclosed", "- just\n- a list\n"])
+def test_sheet_text_reports_a_bad_source_file(tmp_path, capsys, text):
+    ash = make_campaign(tmp_path)
+    (ash / "dndbeyond.yaml").write_text(text, encoding="utf-8")
+    assert main(["sheet-text", str(ash)]) == 1
+    assert "dndbeyond.yaml" in capsys.readouterr().out
+
+
+def test_workbook_reports_missing_fonts(tmp_path, monkeypatch, capsys):
+    import importlib
+    import sys
+
+    ash = make_campaign(tmp_path)
+    monkeypatch.setenv("DDTOOLS_FONT_DIR", str(tmp_path / "no-fonts"))
+    for mod in ("ddtools.workbook", "ddtools.pdfstyle"):
+        monkeypatch.delitem(sys.modules, mod, raising=False)
+    try:
+        assert main(["workbook", str(ash)]) == 1
+        assert "DejaVu fonts not found" in capsys.readouterr().out
+    finally:
+        monkeypatch.undo()
+        for mod in ("ddtools.pdfstyle", "ddtools.workbook"):
+            sys.modules.pop(mod, None)
+        importlib.import_module("ddtools.workbook")
