@@ -28,6 +28,7 @@ _STAMPS = [
 _HEADING = re.compile(r'P\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*(h1|h2)\s*\)')
 _SECTION = re.compile(r'\bsection\(\s*(\d+)\s*,\s*"((?:[^"\\]|\\.)*)"')
 _TAG = re.compile(r"<[^>]+>")
+_BASELINE_KEYS = ("pages", "headings", "texts")
 
 
 def _collapse(text: str) -> str:
@@ -113,12 +114,25 @@ def similarity(a: Image.Image, b: Image.Image) -> float:
 def compare(
     pdf: Path, script: Path, baseline: Path, threshold: float = THRESHOLD, name: str | None = None
 ) -> list[str]:
-    """Compare a PDF with its baseline. Returns human-readable problems (empty = matches)."""
+    """Compare a PDF with its baseline. Returns human-readable problems (empty = matches).
+
+    A missing, unreadable or incomplete baseline (its JSON or a page image) is a problem
+    in the list, not an exception.
+    """
     name = name or Path(pdf).stem
     base_file = Path(baseline) / f"{name}.json"
     if not base_file.exists():
         return [f"{name}: no baseline at {base_file} (run `ddtools golden update`)"]
-    base = json.loads(base_file.read_text(encoding="utf-8"))
+    redo = "(run `ddtools golden update`)"
+    try:
+        base = json.loads(base_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as err:
+        return [f"{name}: can't read the baseline {base_file} ({err}) {redo}"]
+    missing = [k for k in _BASELINE_KEYS if not isinstance(base, dict) or k not in base]
+    if missing:
+        return [f"{name}: baseline {base_file} has no {', '.join(missing)} {redo}"]
+    if not all(isinstance(h, dict) and {"text", "page"} <= h.keys() for h in base["headings"]):
+        return [f"{name}: baseline {base_file} has a heading with no text or page {redo}"]
     pages = page_texts(pdf)
     problems: list[str] = []
     if len(pages) != base["pages"]:
@@ -141,7 +155,13 @@ def compare(
             problems.append(f"{name}: text differs on page {i}:\n" + "\n".join(list(diff)[:20]))
     for i in range(min(len(pages), base["pages"])):
         png = Path(baseline) / name / f"page-{i + 1:02d}.png"
-        score = similarity(Image.open(png).convert("L"), _render(pdf, i))
+        try:
+            with Image.open(png) as img:
+                was = img.convert("L")
+        except OSError as err:
+            problems.append(f"{name}: can't read the baseline image {png} ({err}) {redo}")
+            continue
+        score = similarity(was, _render(pdf, i))
         if score < threshold:
             problems.append(f"{name}: page {i + 1} looks different (similarity {score:.3f})")
     return problems

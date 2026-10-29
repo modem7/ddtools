@@ -8,10 +8,11 @@ import sys
 from pathlib import Path
 
 from ddtools.config import load_character
+from ddtools.errors import DdtoolsError
 from ddtools.textdump import write_text_copy
 
 
-class BuildError(Exception):
+class BuildError(DdtoolsError):
     """A build script failed. ``script`` is its path, ``stderr`` its error output."""
 
     def __init__(self, script: Path, stderr: str):

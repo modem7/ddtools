@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import errno
+import os
 import shutil
 import unicodedata
 from datetime import date
@@ -11,19 +13,32 @@ import yaml
 
 from ddtools.checks import load_secrets
 from ddtools.config import FILENAME, Character, character_dirs, load_character, save_character
+from ddtools.errors import DdtoolsError
 
 TEMPLATE = Path(__file__).resolve().parent / "character_template"
 REASONS = ("death", "tpk", "retired", "campaign-end")
 
 
+class LifecycleError(DdtoolsError, ValueError):
+    """A bad name, campaign source or retire reason (also a ``ValueError``)."""
+
+
+class CharacterExists(DdtoolsError, FileExistsError):
+    """The folder a character would go to is already there (also a ``FileExistsError``)."""
+
+
 def slugify(name: str) -> str:
-    """Folder name for a character: ASCII, apostrophes dropped, other gaps → ``_``."""
+    """Folder name for a character: ASCII, apostrophes dropped, other gaps → ``_``.
+
+    Raises:
+        LifecycleError: nothing usable is left of ``name``.
+    """
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     ascii_name = ascii_name.replace("'", "")
     slug = "".join(c if c.isalnum() else "_" for c in ascii_name)
     slug = "_".join(part for part in slug.split("_") if part)
     if not slug:
-        raise ValueError(f"Can't make a folder name from {name!r}")
+        raise LifecycleError(f"Can't make a folder name from {name!r}")
     return slug
 
 
@@ -33,14 +48,22 @@ def new_character(
     campaign_from: Path | None = None,
     new_campaign: str | None = None,
 ) -> Path:
-    """Scaffold ``<root>/<slug>/`` from the template. Give exactly one campaign source."""
+    """Scaffold ``<root>/<slug>/`` from the template. Give exactly one campaign source.
+
+    All or nothing: if anything fails after the copy, the new folder is removed.
+
+    Raises:
+        LifecycleError: not exactly one campaign source, or an unusable name.
+        CharacterExists: ``<root>/<slug>`` is already there.
+        ConfigError: ``campaign_from`` isn't a valid character folder.
+    """
     if (campaign_from is None) == (new_campaign is None):
-        raise ValueError("Give exactly one of campaign_from or new_campaign")
+        raise LifecycleError("Give exactly one of campaign_from or new_campaign")
     name = " ".join(name.split())
     slug = slugify(name)
     dest = Path(root) / slug
     if dest.exists():
-        raise FileExistsError(f"{dest} already exists")
+        raise CharacterExists(f"{dest} already exists")
     if campaign_from is not None:
         campaign = load_character(campaign_from).campaign
         campaign = {**campaign, "party": [
@@ -99,19 +122,53 @@ def _retired_note(ch: Character, reason: str, note: str) -> str:
 
 
 def retire(dir: Path, reason: str, note: str, root: Path) -> Path:
-    """Mark a character retired, write ``RETIRED.md`` and move them to ``<root>/archive/``."""
+    """Mark a character retired, write ``RETIRED.md`` and move them to ``<root>/archive/``.
+
+    All or nothing: if saving, writing or the move fails, ``character.yaml`` and
+    ``RETIRED.md`` go back to how they were, a half-copied archive folder is removed, and
+    the error is raised. The one gap: across filesystems the folder is copied, then the
+    original deleted. If that delete fails, the complete archived copy is kept and the
+    error is raised, so part of the original may be left to delete by hand.
+
+    Raises:
+        LifecycleError: ``reason`` isn't one of ``REASONS``.
+        CharacterExists: ``<root>/archive/<folder>`` is already there.
+        ConfigError: ``dir`` isn't a valid character folder.
+    """
     if reason not in REASONS:
-        raise ValueError(f"reason must be one of {', '.join(REASONS)}")
+        raise LifecycleError(f"reason must be one of {', '.join(REASONS)}")
     ch = load_character(dir)
     dest = Path(root) / "archive" / Path(dir).name
     if dest.exists():
-        raise FileExistsError(f"{dest} already exists")
+        raise CharacterExists(f"{dest} already exists")
+    cfg, notes = ch.dir / FILENAME, ch.dir / "RETIRED.md"
+    old_cfg = cfg.read_bytes()
+    old_notes = notes.read_bytes() if notes.exists() else None
     ch.status = "retired"
     ch.retired = {"date": date.today(), "reason": reason, "note": note}
-    save_character(ch)
-    (ch.dir / "RETIRED.md").write_text(_retired_note(ch, reason, note), encoding="utf-8")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(ch.dir), dest)
+    text = _retired_note(ch, reason, note)  # everything is worked out before any write
+    copied = False
+    try:
+        save_character(ch)
+        notes.write_text(text, encoding="utf-8")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.rename(ch.dir, dest)
+        except OSError as err:
+            if err.errno != errno.EXDEV:
+                raise
+            shutil.copytree(ch.dir, dest, symlinks=True)
+            copied = True  # the archive is complete from here on
+            shutil.rmtree(ch.dir)
+    except BaseException:
+        if not copied:
+            shutil.rmtree(dest, ignore_errors=True)  # a half-made copy, if any
+            cfg.write_bytes(old_cfg)
+            if old_notes is None:
+                notes.unlink(missing_ok=True)
+            else:
+                notes.write_bytes(old_notes)
+        raise
     return dest
 
 

@@ -13,6 +13,8 @@ from datetime import date
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from ddtools.errors import DdtoolsError
+
 API = "https://character-service.dndbeyond.com/character/v5/character/{id}"
 ABILITIES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
 _SCORE_SUBTYPES = [
@@ -30,23 +32,39 @@ LEVELUP_CHECKLIST = [
 ]
 
 
-class DndBeyondError(Exception):
-    """A sheet could not be fetched. The message says which character and why."""
+class DndBeyondError(DdtoolsError):
+    """A sheet could not be fetched or read. The message says which character and why."""
+
+
+class SnapshotError(DndBeyondError):
+    """A saved sheet in ``snapshots/`` can't be read. The message names the file."""
+
+
+class BadCharacterId(DdtoolsError, ValueError):
+    """Text that isn't a D&D Beyond character id or URL."""
 
 
 def parse_id(text: str) -> int:
-    """A character id from a bare number or any ``dndbeyond.com/characters/<id>`` URL."""
+    """A character id from a bare number or any ``dndbeyond.com/characters/<id>`` URL.
+
+    Raises:
+        BadCharacterId: ``text`` has no id in it (also a ``ValueError``).
+    """
     text = str(text).strip()
     if text.isdigit():
         return int(text)
     m = re.search(r"dndbeyond\.com/characters/(\d+)", text)
     if not m:
-        raise ValueError(f"Not a D&D Beyond character id or URL: {text!r}")
+        raise BadCharacterId(f"Not a D&D Beyond character id or URL: {text!r}")
     return int(m.group(1))
 
 
 def fetch_character(char_id: int, timeout: float = 20) -> dict:
-    """Fetch a character's sheet JSON (the ``data`` object)."""
+    """Fetch a character's sheet JSON (the ``data`` object).
+
+    Raises:
+        DndBeyondError: the sheet couldn't be fetched; the message says why.
+    """
     req = Request(API.format(id=char_id), headers={"User-Agent": "ddtools/0.1"})
     try:
         with urlopen(req, timeout=timeout) as resp:
@@ -102,6 +120,20 @@ def save_snapshot(ch, data: dict, today: str | None = None) -> Path:
         path = folder / f"{day}-{n}.json"
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
+
+
+def load_snapshot(path: Path):
+    """The JSON in a saved snapshot (a sheet, or ``party.json``'s list).
+
+    Raises:
+        SnapshotError: the file is missing, unreadable or not valid JSON.
+    """
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError as err:
+        raise SnapshotError(f"{path}: not found") from err
+    except (OSError, UnicodeDecodeError, ValueError) as err:
+        raise SnapshotError(f"{path}: can't read it as a snapshot ({err})") from err
 
 
 def latest_snapshots(ch, n: int = 2) -> list[Path]:
@@ -255,6 +287,7 @@ LIST_DIFFS = (
     "options_added", "options_removed", "feats_added", "feats_removed",
     "items_added", "items_removed", "attunement_changed",
 )  # fmt: skip
+_PARTY_KEYS = {"id", "name", "level", "classes"}  # what watch compares in party.json
 MEANINGFUL = ("level", "classes", "spells_added", "spells_removed", *LIST_DIFFS, "stats", "hp_base")
 
 
@@ -264,7 +297,10 @@ def is_meaningful(d: dict) -> bool:
 
 
 def watch_character(ch, fetch=None) -> dict:
-    """Compare live sheets with the committed baselines for one character and its party."""
+    """Compare live sheets with the committed baselines for one character and its party.
+
+    Never raises for a fetch or a bad file: problems go into ``result["errors"]``.
+    """
     fetch = fetch or fetch_character
     result: dict = {"character": ch.name, "dir": Path(ch.dir).name, "own": None, "party": []}
     result["errors"] = []
@@ -273,7 +309,7 @@ def watch_character(ch, fetch=None) -> dict:
         try:
             live = fetch(ch.dndbeyond_id)
             if snaps:
-                d = diff(json.loads(snaps[-1].read_text(encoding="utf-8")), live)
+                d = diff(load_snapshot(snaps[-1]), live)
                 result["own"] = d if is_meaningful(d) else None
                 result["gold"] = d["gold"]
             else:
@@ -283,9 +319,23 @@ def watch_character(ch, fetch=None) -> dict:
     party_file = snapshot_dir(ch) / "party.json"
     before = {}
     if party_file.exists():
-        before = {p["id"]: p for p in json.loads(party_file.read_text(encoding="utf-8"))}
+        try:
+            entries = load_snapshot(party_file)
+            if not isinstance(entries, list) or not all(
+                isinstance(p, dict) and _PARTY_KEYS <= p.keys() for p in entries
+            ):
+                raise ValueError
+            before = {p["id"]: p for p in entries}
+        except SnapshotError as err:
+            result["errors"].append(f"{ch.name}: {err}")
+        except ValueError:
+            result["errors"].append(f"{ch.name}: {party_file}: not a list of party entries "
+                                    "(remake it with `ddtools party <dir> --json`)")  # fmt: skip
     for member in ch.campaign.get("party") or []:
         if member.get("status") == "gone":
+            continue
+        if not member.get("dndbeyond_id"):
+            result["errors"].append(f"{member['name']}: no dndbeyond_id in the party list")
             continue
         try:
             now = party_entry(fetch(member["dndbeyond_id"]))

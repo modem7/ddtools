@@ -103,3 +103,34 @@ def test_an_earlier_import_is_kept(mossy, tmp_path, capsys):
     main(["import-workbook", str(filled), str(mossy)])
     files = sorted((mossy / "notes" / "sources").glob("workbook-answers*.md"))
     assert len(files) == 2
+
+
+def test_failed_import_writes_nothing(mossy, tmp_path, monkeypatch):
+    import ddtools.workbook_import as wi
+
+    filled, _, _ = _filled(mossy, tmp_path)
+    before = (mossy / "character.yaml").read_bytes()
+    real = wi.set_top_level
+    calls = []
+
+    def second_fails(ch_dir, key, value):
+        calls.append(key)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        real(ch_dir, key, value)
+
+    monkeypatch.setattr(wi, "set_top_level", second_fails)
+    with pytest.raises(OSError):
+        wi.import_workbook(filled, mossy)
+    assert calls == ["dndbeyond_id", "class_summary"]
+    assert (mossy / "character.yaml").read_bytes() == before, "the first fill is undone"
+    assert not list((mossy / "notes" / "sources").glob("workbook-answers*.md"))
+
+
+def test_missing_or_bad_pdf_is_reported(mossy, tmp_path, capsys):
+    assert main(["import-workbook", str(tmp_path / "nope.pdf"), str(mossy)]) == 1
+    assert "nope.pdf: not found" in capsys.readouterr().out
+    junk = tmp_path / "junk.pdf"
+    junk.write_bytes(b"this is not a pdf")
+    assert main(["import-workbook", str(junk), str(mossy)]) == 1
+    assert "junk.pdf" in capsys.readouterr().out

@@ -14,12 +14,14 @@ from typing import Any
 
 import yaml
 
+from ddtools.errors import DdtoolsError
+
 AUDIENCES = ("private", "party", "dm")
 STATUSES = ("active", "retired")
 FILENAME = "character.yaml"
 
 
-class ConfigError(Exception):
+class ConfigError(DdtoolsError):
     """character.yaml is missing or invalid. The message names the file and field."""
 
 
@@ -80,7 +82,14 @@ KNOWN_KEYS = {
 
 
 def load_character(dir: Path | str | None = None) -> Character:
-    """Load and validate ``<dir>/character.yaml`` (default: ``$DDTOOLS_CHARACTER_DIR``)."""
+    """Load and validate ``<dir>/character.yaml`` (default: ``$DDTOOLS_CHARACTER_DIR``).
+
+    Every ``campaign.party`` entry must be a mapping with a ``name``. ``dndbeyond_id`` is
+    optional here; the commands that fetch a member report it if it's missing.
+
+    Raises:
+        ConfigError: the file is missing or invalid; the message names the file and field.
+    """
     if dir is None:
         env = os.environ.get("DDTOOLS_CHARACTER_DIR")
         if not env:
@@ -112,6 +121,18 @@ def load_character(dir: Path | str | None = None) -> Character:
                 f"{path}: documents[{i}].audience must be one of {', '.join(AUDIENCES)}"
             )
         docs.append(Document(**d))
+    campaign = data.get("campaign") or {}
+    if not isinstance(campaign, dict):
+        raise ConfigError(f"{path}: field 'campaign' must be a mapping")
+    party = campaign.get("party") or []
+    if not isinstance(party, list):
+        raise ConfigError(f"{path}: campaign.party must be a list")
+    for i, p in enumerate(party):
+        if not isinstance(p, dict) or not isinstance(p.get("name"), str) or not p["name"]:
+            raise ConfigError(
+                f"{path}: campaign.party[{i}] needs a name (as text: quote it if it looks "
+                "like a number or yes/no)"
+            )
     return Character(
         dir=base,
         name=name,
@@ -120,7 +141,7 @@ def load_character(dir: Path | str | None = None) -> Character:
         updated=updated,
         dndbeyond_id=data.get("dndbeyond_id"),
         class_summary=data.get("class_summary", ""),
-        campaign=data.get("campaign") or {},
+        campaign=campaign,
         documents=docs,
         secrets_file=data.get("secrets_file", "secrets.txt"),
         retired=data.get("retired"),
