@@ -1,12 +1,16 @@
-"""Command-line entry point. Subcommands register themselves via ``command``."""
+"""Command-line entry point. Subcommands register themselves via ``command``.
+
+The commands live in ``ddtools.registry``; ``command`` and ``unregister`` are its
+helpers, re-exported here.
+"""
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from ddtools import __version__
+from ddtools import __version__, plugins
+from ddtools.registry import COMMANDS, Configure, Handler, command, unregister
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -14,24 +18,11 @@ if TYPE_CHECKING:
     from ddtools.config import Character
     from ddtools.dndbeyond import SheetSummary
 
-Handler = Callable[[argparse.Namespace], int]
-_COMMANDS: list[tuple[str, str, Callable[[argparse.ArgumentParser], None], Handler]] = []
-
-
-def command(name: str, help: str, configure: Callable[[argparse.ArgumentParser], None]):
-    """Decorator registering a subcommand: ``configure`` adds arguments, the function runs it."""
-
-    def wrap(fn: Handler) -> Handler:
-        _COMMANDS.append((name, help, configure, fn))
-        return fn
-
-    return wrap
+__all__ = ["Configure", "Handler", "build_parser", "command", "main", "unregister"]
 
 
 def build_parser() -> argparse.ArgumentParser:
     import sys
-
-    from ddtools import plugins
 
     for warning in plugins.load():
         print(f"warning: {warning}", file=sys.stderr)
@@ -40,10 +31,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"ddtools {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
-    for name, help_text, configure, fn in _COMMANDS:
-        p = sub.add_parser(name, help=help_text, description=help_text)
-        configure(p)
-        p.set_defaults(func=fn)
+    for cmd in COMMANDS:
+        p = sub.add_parser(cmd.name, help=cmd.help, description=cmd.help)
+        cmd.configure(p)
+        p.set_defaults(func=cmd.fn)
     return parser
 
 

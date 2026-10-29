@@ -228,6 +228,9 @@ def register(api):
 ```
 
 A plugin that fails to load prints one warning and is skipped; `ddtools` still runs.
+A command name that is already taken (by `ddtools` or an earlier plugin) prints a
+warning and is skipped. The first one wins; the rest of the plugin still loads.
+`configure` adds the command's arguments; its return value is ignored.
 Unknown top-level keys in `character.yaml` are kept in `Character.extra` for plugins.
 
 ## Development
