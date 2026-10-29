@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from ddtools.config import PathLike
-    from ddtools.dndbeyond import SheetSummary
+    from ddtools.dndbeyond import SheetDiff, SheetSummary
 
 
 def print_json(data: Any) -> None:
@@ -42,7 +42,7 @@ def format_summary(s: SheetSummary) -> str:
     return "\n".join(lines)
 
 
-def format_diff(d: dict) -> list[str]:
+def format_diff(d: SheetDiff) -> list[str]:
     """One line per change in a ``dndbeyond.diff`` result; empty if nothing changed."""
     lines = []
     if d["level"]:
@@ -68,7 +68,7 @@ def format_diff(d: dict) -> list[str]:
     return lines
 
 
-def diff_report(old_name: str, new_name: str, d: dict) -> str:
+def diff_report(old_name: str, new_name: str, d: SheetDiff) -> str:
     """The ``ddtools diff`` text: the two snapshot names, the changes, then a level-up checklist."""
     from ddtools.dndbeyond import LEVELUP_CHECKLIST
 
