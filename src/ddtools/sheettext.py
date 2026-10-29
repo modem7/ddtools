@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, TypedDict
 
 import yaml
 
-from ddtools.checks import Secret, find_spoilers, load_secrets
 from ddtools.errors import DdtoolsError
+from ddtools.secrets import Secret, find_spoilers, load_character_secrets
 
 if TYPE_CHECKING:
     from ddtools.config import Character, PathLike
@@ -186,7 +186,7 @@ def report(ch: Character) -> SheetTextReport:
     names = party_names(ch)
     allies, missing = allies_text(src, names)
     fill = _block_filler(ch, names)
-    secrets = load_secrets(ch.secrets_path) if ch.secrets_path.is_file() else []
+    secrets = load_character_secrets(ch)
     snapshot, data = _latest_snapshot(ch)
     live = live_fields(data) if data else {}
     fields: list[FieldReport] = []

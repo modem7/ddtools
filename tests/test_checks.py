@@ -1,11 +1,5 @@
-from ddtools.checks import (
-    Secret,
-    clean,
-    find_future_spells,
-    find_spoilers,
-    load_secrets,
-    load_spell_names,
-)
+from ddtools.checks import find_future_spells, load_spell_names
+from ddtools.secrets import Secret, clean, find_spoilers, load_secrets
 
 
 def test_load_secrets(tmp_path):
