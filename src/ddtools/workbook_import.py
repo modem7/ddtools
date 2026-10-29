@@ -9,7 +9,6 @@ hand (by Claude, from the blueprints), never generated from here.
 
 from __future__ import annotations
 
-import html
 from datetime import date
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -74,15 +73,10 @@ def read_fields(pdf: PathLike) -> list[WorkbookField]:
     return out
 
 
-def _titles(ch: Character) -> dict[int, str]:
-    from ddtools import workbook as W
-
-    W.story(ch)
-    return {n: html.unescape(t) for n, t in W.TITLES.items()}
-
-
 def answers_markdown(ch: Character, fields: list[WorkbookField], source: str) -> str:
-    titles = _titles(ch)
+    from ddtools.workbook import section_titles
+
+    titles = section_titles(ch)
     out = [f"# Workbook answers: {ch.name}", "",
            f"Imported from `{source}` on {date.today().isoformat()} by `ddtools import-workbook`.",
            "Verbatim: nothing here has been edited."]  # fmt: skip
