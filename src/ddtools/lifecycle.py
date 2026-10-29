@@ -11,7 +11,6 @@ from pathlib import Path
 
 import yaml
 
-from ddtools.checks import load_secrets
 from ddtools.config import (
     FILENAME,
     Character,
@@ -21,6 +20,7 @@ from ddtools.config import (
     save_character,
 )
 from ddtools.errors import DdtoolsError
+from ddtools.secrets import load_character_secrets
 
 TEMPLATE = Path(__file__).resolve().parent / "character_template"
 REASONS = ("death", "tpk", "retired", "campaign-end")
@@ -105,7 +105,7 @@ def new_character(
 
 
 def _retired_note(ch: Character, reason: str, note: str) -> str:
-    secrets = load_secrets(ch.secrets_path) if ch.secrets_path.exists() else []
+    secrets = load_character_secrets(ch)
     open_rules = [r["text"] for r in ch.campaign.get("rules") or [] if r.get("status") == "open"]
     dm_docs = [d.file for d in ch.documents if d.audience == "dm"]
     lines = [

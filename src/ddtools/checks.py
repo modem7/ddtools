@@ -3,35 +3,26 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
 from ddtools.dndbeyond import latest_snapshots, load_snapshot, summarise
 from ddtools.golden import Heading, headings_from_script, locate_headings
+from ddtools.secrets import (
+    _flatten,
+    _page_of,
+    clean,
+    find_spoilers,
+    load_character_secrets,
+)
 from ddtools.textdump import page_texts
 
 if TYPE_CHECKING:
     from ddtools.config import Character, PathLike
 
-_QUOTES = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "­": None})
 _LEVEL_LABEL = re.compile(r"\blevels?\s*\d+\+?|\bat level\b", re.IGNORECASE)
 _SENTENCE_END = re.compile(r"[.!?•\n]")
-
-
-@dataclass(frozen=True)
-class Secret:
-    text: str
-    exact: bool
-
-
-class SpoilerHit(TypedDict):
-    """A secret found in a document."""
-
-    page: int
-    term: str
-    context: str  # the text around it, ±40 characters
 
 
 class FutureSpellHit(TypedDict):
@@ -40,59 +31,6 @@ class FutureSpellHit(TypedDict):
     page: int
     spell: str
     sentence: str
-
-
-def clean(text: str) -> str:
-    """Straighten quotes, drop soft hyphens and collapse whitespace."""
-    return re.sub(r"\s+", " ", text.translate(_QUOTES)).strip()
-
-
-def load_secrets(path: PathLike) -> list[Secret]:
-    """One entry per line; ``#`` comments and blanks ignored; ``"quoted"`` = exact match."""
-    secrets = []
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        exact = len(line) > 1 and line[0] == line[-1] == '"'
-        text = clean(line[1:-1] if exact else line)
-        if text:  # '""' alone would match everywhere
-            secrets.append(Secret(text, exact))
-    return secrets
-
-
-def _pattern(secret: Secret) -> re.Pattern:
-    words = r"\s+".join(re.escape(w) for w in secret.text.split())
-    return re.compile(rf"(?<!\w){words}(?!\w)", 0 if secret.exact else re.IGNORECASE)
-
-
-def _flatten(pages: list[str], sep: str = " ") -> tuple[str, list[int]]:
-    """All pages cleaned and joined with ``sep``, plus each page's start offset."""
-    starts: list[int] = []
-    flat = ""
-    for page in pages:
-        starts.append(len(flat))
-        flat += clean(page) + sep
-    return flat, starts
-
-
-def _page_of(offset: int, starts: list[int]) -> int:
-    return max(i for i, start in enumerate(starts) if start <= offset) + 1
-
-
-def find_spoilers(pages: list[str], secrets: list[Secret]) -> list[SpoilerHit]:
-    """Every occurrence of a secret: ``{page, term, context}`` (context is ±40 characters).
-
-    Pages are scanned as one text, so a secret split across a page break is still found
-    (reported on the page where it starts).
-    """
-    flat, starts = _flatten(pages)
-    hits: list[SpoilerHit] = []
-    for secret in secrets:
-        for m in _pattern(secret).finditer(flat):
-            ctx = flat[max(0, m.start() - 40) : m.end() + 40].strip()
-            hits.append({"page": _page_of(m.start(), starts), "term": secret.text, "context": ctx})
-    return sorted(hits, key=lambda h: h["page"])
 
 
 def load_spell_names() -> set[str]:
@@ -174,7 +112,7 @@ def run_checks(ch: Character, pdf_dir: PathLike | None = None) -> list[str]:
         ConfigError: a document's ``ddtools:`` script doesn't exist.
     """
     problems = []
-    secrets = load_secrets(ch.secrets_path) if ch.secrets_path.exists() else []
+    secrets = load_character_secrets(ch)
     snaps = latest_snapshots(ch, 1)
     sheet = snapshot_spell_names(load_snapshot(snaps[-1])) if snaps else None
     known = load_spell_names()

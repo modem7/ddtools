@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Changed:** the secrets code (`Secret`, `SpoilerHit`, `clean`, `load_secrets`,
+  `find_spoilers`) moved from `ddtools.checks` to a new `ddtools.secrets`, which imports no
+  PDF code, so `sheettext` and `lifecycle` no longer load PDF rendering. A missing secrets
+  file, or a folder named `secrets.txt`, now means no secrets everywhere (one
+  `load_character_secrets` helper). Import them from `ddtools.secrets`.
 - **Changed:** typing pass. Every public path parameter is a `PathLike`; `SheetDiff` and
   `PartyMember` are `TypedDict`s; the package ships `py.typed`; CI runs mypy.
 - **Changed:** `load_character` checks each `documents:` entry (known fields, text and list
