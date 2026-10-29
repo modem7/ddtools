@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Changed:** field names in a PDF now start from 1 for each `ddtools.pdfstyle.build()`, so
+  building the same story twice gives the same names. `ddtools.pdfstyle.ensure_fonts()` is
+  the (repeatable) font registration that importing the module runs.
+- **Changed:** `ddtools build` deletes the old PDF before running a document's script, and
+  reports "did not write" if the file is not there afterwards. Before, a script that
+  failed after the PDF was last written left the old PDF in place; now it is removed.
 - **Changed:** `ddtools.workbook.section_titles(ch)` is gone. The titles are
   `ddtools.workbook_fields.SECTION_TITLES`, so `import-workbook` no longer loads
   the PDF builder.

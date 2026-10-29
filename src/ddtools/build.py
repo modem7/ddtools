@@ -37,7 +37,7 @@ def build_character(char_dir: PathLike, out: PathLike | None = None) -> list[Pat
     for doc in ch.documents:
         script, cmd, cwd = doc.command(ch.dir)
         pdf = out_dir / Path(doc.file).name
-        before = pdf.stat().st_mtime_ns if pdf.exists() else None
+        pdf.unlink(missing_ok=True)
         run = subprocess.run(
             cmd,
             cwd=cwd,
@@ -47,7 +47,7 @@ def build_character(char_dir: PathLike, out: PathLike | None = None) -> list[Pat
         )
         if run.returncode != 0:
             raise BuildError(script, run.stderr.strip() or run.stdout.strip())
-        if not pdf.exists() or pdf.stat().st_mtime_ns == before:
+        if not pdf.exists():
             raise BuildError(
                 script,
                 f"The script finished but did not write {pdf}. Check that the file name it "
