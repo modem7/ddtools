@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from ddtools.config import PathLike
     from ddtools.dndbeyond import SheetSummary
 
 
@@ -77,7 +80,9 @@ def diff_report(old_name: str, new_name: str, d: dict) -> str:
     return "\n".join(out)
 
 
-def run_watch(dirs: list[str], as_json: bool = False, issue_dir: str | None = None) -> int:
+def run_watch(
+    dirs: Sequence[PathLike], as_json: bool = False, issue_dir: PathLike | None = None
+) -> int:
     """Compare live sheets with the snapshots and print (and write) what changed.
 
     ``dirs`` empty means every character under the current folder; only active ones

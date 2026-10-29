@@ -27,3 +27,14 @@ def test_cli_preview_writes_sheet(two_page_pdf, tmp_path, monkeypatch, capsys):
     out = tmp_path / "tmp" / "preview-Doc.png"
     assert out.exists()
     assert str(out) in capsys.readouterr().out
+
+
+def test_path_functions_accept_plain_strings(two_page_pdf, tmp_path):
+    from ddtools.preview import page_count
+    from ddtools.textdump import page_texts, write_text_copy
+
+    pdf = str(two_page_pdf)
+    assert page_count(pdf) == 2
+    assert len(page_texts(pdf)) == 2
+    assert write_text_copy(pdf).suffix == ".txt"
+    assert contact_sheet(pdf, str(tmp_path / "s.png"), scale=0.3).exists()

@@ -21,7 +21,7 @@ from ddtools.preview import render_page
 from ddtools.textdump import page_texts
 
 if TYPE_CHECKING:
-    from ddtools.config import Character
+    from ddtools.config import Character, PathLike
 
 SCALE = 0.35
 THRESHOLD = 0.98
@@ -69,7 +69,7 @@ def _plain(markup: str) -> str:
     return _collapse(html.unescape(_TAG.sub("", markup)))
 
 
-def headings_from_script(script: Path) -> list[tuple[str, str]]:
+def headings_from_script(script: PathLike) -> list[tuple[str, str]]:
     """Every h1/h2 heading in a build script, in source order.
 
     Recognises ``P("…", h1|h2)``, the old workbook's ``section(N, "Name", …)`` and
@@ -111,7 +111,7 @@ def _render(pdf: Path, index: int) -> Image.Image:
     return render_page(pdf, index, SCALE).convert("L")
 
 
-def capture(pdf: Path, script: Path, dest: Path, name: str | None = None) -> Baseline:
+def capture(pdf: PathLike, script: PathLike, dest: PathLike, name: str | None = None) -> Baseline:
     """Record a baseline for ``pdf`` (headings taken from ``script``) into ``dest``."""
     name = name or Path(pdf).stem
     pages = page_texts(pdf)
@@ -141,7 +141,11 @@ def similarity(a: Image.Image, b: Image.Image) -> float:
 
 
 def compare(
-    pdf: Path, script: Path, baseline: Path, threshold: float = THRESHOLD, name: str | None = None
+    pdf: PathLike,
+    script: PathLike,
+    baseline: PathLike,
+    threshold: float = THRESHOLD,
+    name: str | None = None,
 ) -> list[str]:
     """Compare a PDF with its baseline. Returns human-readable problems (empty = matches).
 
@@ -199,7 +203,7 @@ def compare(
 # ---- per character (what `ddtools golden` runs) --------------------------
 
 
-def record_character(ch: Character, dest: Path, rebuild: bool) -> int:
+def record_character(ch: Character, dest: PathLike, rebuild: bool) -> int:
     """Capture a baseline for every document, from a fresh build or the committed PDFs.
 
     Prints one line per document (and a warning per heading not found). Returns 1 if
@@ -226,7 +230,7 @@ def record_character(ch: Character, dest: Path, rebuild: bool) -> int:
     return 0
 
 
-def check_character(ch: Character, dest: Path) -> int:
+def check_character(ch: Character, dest: PathLike) -> int:
     """Rebuild into a temporary folder and compare every document with its baseline.
 
     Prints one line per document. Returns 1 if the build fails or anything differs.
@@ -234,6 +238,7 @@ def check_character(ch: Character, dest: Path) -> int:
     """
     from ddtools.build import BuildError, build_character
 
+    dest = Path(dest)
     if not dest.is_dir():
         print(
             f"{ch.name}: no golden baseline yet. "

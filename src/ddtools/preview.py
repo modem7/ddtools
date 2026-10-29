@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pypdfium2 as pdfium
 from PIL import Image
 
+if TYPE_CHECKING:
+    from ddtools.config import PathLike
 
-def render_page(pdf: Path, index: int, scale: float = 0.6) -> Image.Image:
+
+def render_page(pdf: PathLike, index: int, scale: float = 0.6) -> Image.Image:
     """Render one page (0-based) to an RGB image."""
     doc = pdfium.PdfDocument(str(pdf))
     try:
@@ -17,7 +21,7 @@ def render_page(pdf: Path, index: int, scale: float = 0.6) -> Image.Image:
         doc.close()
 
 
-def page_count(pdf: Path) -> int:
+def page_count(pdf: PathLike) -> int:
     doc = pdfium.PdfDocument(str(pdf))
     try:
         return len(doc)
@@ -26,7 +30,7 @@ def page_count(pdf: Path) -> int:
 
 
 def contact_sheet(
-    pdf: Path, out: Path, pages: range | None = None, scale: float = 0.6, cols: int = 4
+    pdf: PathLike, out: PathLike, pages: range | None = None, scale: float = 0.6, cols: int = 4
 ) -> Path:
     """Lay the chosen pages out in a grid (``cols`` wide) and save it as a PNG."""
     indices = list(pages if pages is not None else range(page_count(pdf)))
