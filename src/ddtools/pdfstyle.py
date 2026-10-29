@@ -51,7 +51,7 @@ __all__ = [
     "ACCENT", "EMBER", "INK", "MUTED", "RULE", "HEAD_BG", "NOTE_BG", "WARN_BG", "FIELD_BG",
     "body", "small", "smallb", "title", "sub", "h1", "h2", "bullet", "mono",
     "P", "bl", "table", "box", "todo", "code", "Field", "Ticks", "make_footer", "build",
-    "FontsMissing",
+    "FontsMissing", "ensure_fonts",
 ]  # fmt: skip
 
 _BUNDLED_FONT_DIR = Path(__file__).parent / "fonts"
@@ -68,12 +68,20 @@ class FontsMissing(DdtoolsError, RuntimeError):
     """The DejaVu fonts the documents are designed around cannot be found."""
 
 
-def _register_fonts() -> None:
-    """Register the DejaVu fonts.
+_fonts_ready = False
+
+
+def ensure_fonts() -> None:
+    """Register the DejaVu fonts, once. Importing this module calls it.
+
+    Paragraphs look their font up when they are made, so it cannot wait until ``build``.
 
     They ship with the package (``ddtools/fonts``). Set ``DDTOOLS_FONT_DIR`` to use
     another folder instead; it must then hold all five files.
     """
+    global _fonts_ready
+    if _fonts_ready:
+        return
     override = os.environ.get("DDTOOLS_FONT_DIR")
     font_dir = Path(override) if override else _BUNDLED_FONT_DIR
     missing = [f for f in _FONTS.values() if not (font_dir / f).is_file()]
@@ -86,9 +94,11 @@ def _register_fonts() -> None:
     for name, file in _FONTS.items():
         pdfmetrics.registerFont(TTFont(name, str(font_dir / file)))
     pdfmetrics.registerFontFamily("DV", normal="DV", bold="DVB", italic="DV", boldItalic="DVB")
+    _fonts_ready = True
 
 
-_register_fonts()
+ensure_fonts()
+
 
 ACCENT = colors.HexColor("#8a2a12")
 EMBER = colors.HexColor("#c4561d")
@@ -288,6 +298,7 @@ def make_footer(label: str) -> Callable[[Canvas, BaseDocTemplate], None]:
 
 def build(story: list[Flowable], path: PathLike, label: str, author: str = "") -> None:
     """Build an A4 document with the standard margins and footer."""
+    _field_counter[0] = 0
     doc = SimpleDocTemplate(
         str(path), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
         topMargin=18 * mm, bottomMargin=20 * mm, title=label, author=author,

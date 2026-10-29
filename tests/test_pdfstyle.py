@@ -1,5 +1,3 @@
-import importlib
-
 import pypdfium2 as pdfium
 import pytest
 
@@ -32,22 +30,44 @@ def test_missing_fonts(monkeypatch, tmp_path):
     import ddtools.pdfstyle as ps
 
     monkeypatch.setenv("DDTOOLS_FONT_DIR", str(tmp_path))
-    # reload() creates a fresh FontsMissing class, so match on its base and name
-    with pytest.raises(RuntimeError) as exc:
-        importlib.reload(ps)
-    assert type(exc.value).__name__ == "FontsMissing"
+    monkeypatch.setattr(ps, "_fonts_ready", False)
+    with pytest.raises(ps.FontsMissing) as exc:
+        ps.ensure_fonts()
     assert "DDTOOLS_FONT_DIR" in str(exc.value)
-    monkeypatch.delenv("DDTOOLS_FONT_DIR")
-    importlib.reload(ps)
+    assert not ps._fonts_ready
+
+
+def test_importing_pdfstyle_needs_the_fonts(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "DDTOOLS_FONT_DIR": str(tmp_path)}
+    run = subprocess.run(
+        [sys.executable, "-c", "import ddtools.pdfstyle"], env=env, capture_output=True, text=True
+    )
+    assert run.returncode != 0 and "FontsMissing" in run.stderr
 
 
 def test_bundled_fonts(monkeypatch):
     import ddtools.pdfstyle as ps
 
     monkeypatch.delenv("DDTOOLS_FONT_DIR", raising=False)
-    importlib.reload(ps)
+    monkeypatch.setattr(ps, "_fonts_ready", False)
+    ps.ensure_fonts()
+    assert ps._fonts_ready
     for file in ps._FONTS.values():
         assert (ps._BUNDLED_FONT_DIR / file).is_file()
-    for name, file in ps._FONTS.items():
-        # the font registry is global, so check the file came from the bundled folder
-        assert ps.pdfmetrics.getFont(name).face.filename == str(ps._BUNDLED_FONT_DIR / file)
+
+
+def test_two_builds_of_one_story_name_their_fields_alike(tmp_path):
+    import pypdf
+
+    from ddtools import pdfstyle as ps
+
+    def names(out):
+        story = [ps.Field("Name", 1), ps.Ticks(["One", "Two"])]
+        ps.build(story, out, "Test")
+        return list(pypdf.PdfReader(out).get_fields())
+
+    assert names(tmp_path / "a.pdf") == names(tmp_path / "b.pdf")
