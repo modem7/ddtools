@@ -288,7 +288,8 @@ def output_path(ch: Character, filename: str) -> Path:
     return out / filename
 
 
-# Old names, kept: every campaign's copied build scripts import them.
+# Old names, kept for campaigns' copied build scripts. Removed in 1.0: use
+# level_updated_label and updated_label.
 stamp = level_updated_label
 date_stamp = updated_label
 
@@ -480,7 +481,7 @@ def is_present(ch: Character, name: str) -> bool:
     return p is not None and p.get("status", "active") != "gone"
 
 
-present = is_present  # old name, kept for campaigns' own build scripts
+present = is_present  # old name; removed in 1.0, use is_present
 
 
 def absent_friends(ch: Character) -> list[PartyMember]:

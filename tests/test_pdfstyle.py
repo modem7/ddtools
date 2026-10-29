@@ -21,6 +21,13 @@ def test_build_small_pdf(tmp_path):
     assert len(pdfium.PdfDocument(out)) == 1
 
 
+def test_todo_is_a_guidance_box():
+    from ddtools import pdfstyle as ps
+
+    assert isinstance(ps.todo("Say who you are."), ps.Table)
+    assert "todo" in ps.__all__
+
+
 def test_missing_fonts(monkeypatch, tmp_path):
     import ddtools.pdfstyle as ps
 

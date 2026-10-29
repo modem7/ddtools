@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Changed:** `todo()`, the guidance-note box in the starter build scripts, is now
+  `ddtools.pdfstyle.todo`, so the three starter scripts no longer define their own copy,
+  and they use `level_updated_label` instead of `stamp`. The PDFs are the same. The
+  `dnd-campaign-template` repo's copies change to match `ddtools init`.
+- **Removed:** `ddtools.sheettext.status`. Use `field_status`.
+- **Deprecated:** `stamp`, `date_stamp` and `present` in `ddtools.config` will be removed in
+  1.0. Use `level_updated_label`, `updated_label` and `is_present`.
 - **Changed:** the secrets code (`Secret`, `SpoilerHit`, `clean`, `load_secrets`,
   `find_spoilers`) moved from `ddtools.checks` to a new `ddtools.secrets`, which imports no
   PDF code, so `sheettext` and `lifecycle` no longer load PDF rendering. A missing secrets
@@ -59,6 +66,8 @@
   | `stamp(ch)` | `level_updated_label(ch)` |
   | `date_stamp(ch)` | `updated_label(ch)` |
   | `present(ch, name)` | `is_present(ch, name)` |
+
+  The old names are removed in 1.0.
 
 - **New:** `ddtools.config.output_dir(ch)` gives the output folder without creating it.
   `output_path` still creates it.

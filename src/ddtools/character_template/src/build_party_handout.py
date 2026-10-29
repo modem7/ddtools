@@ -3,15 +3,10 @@
 Replace each guidance note with the real content. Keep the headings (or rename them
 in the blueprint too) so the document keeps the shape of the others."""
 
-from ddtools.config import load_character, output_path, stamp
+from ddtools.config import level_updated_label, load_character, output_path
 from ddtools.pdfstyle import *
 
 CH = load_character()
-
-
-def todo(text):
-    """A guidance note: what goes in this section. Delete it once written."""
-    return box([P("<b>To write:</b> " + text, small)], bg=WARN_BG)
 
 
 S = []
@@ -50,5 +45,5 @@ S.append(todo("One tactical bullet per teammate, plus the party's recurring batt
 build(
     S,
     output_path(CH, f"{CH.dir.name}_Party_Handout.pdf"),
-    f"{CH.name} — Party handout · {stamp(CH)}",
+    f"{CH.name} — Party handout · {level_updated_label(CH)}",
 )
