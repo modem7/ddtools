@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Changed:** `ddtools.workbook.section_titles(ch)` is gone. The titles are
+  `ddtools.workbook_fields.SECTION_TITLES`, so `import-workbook` no longer loads
+  the PDF builder.
 - **Changed:** `todo()`, the guidance-note box in the starter build scripts, is now
   `ddtools.pdfstyle.todo`, so the three starter scripts no longer define their own copy,
   and they use `level_updated_label` instead of `stamp`. The PDFs are the same. The
@@ -76,7 +79,7 @@
   `import_workbook`, `set_top_level`, `set_party_fields`, `add_party_member` and
   `sheettext.load_source`.
 - **Changed:** `ddtools.workbook` is split into one function per section. The workbook
-  PDF is the same. `section_titles(ch)` gives the section titles without building it,
+  PDF is the same. `ddtools.workbook_fields.SECTION_TITLES` gives the section titles,
   and `ddtools.workbook_fields` has the field names (`field_key`, `section_of`) for the
   workbook and `import-workbook`. `field_key` now takes the section too:
   `field_key(section, label)`. It still imports from `ddtools.workbook`. `TITLES`,
