@@ -11,13 +11,17 @@ import difflib
 import html
 import json
 import re
+import tempfile
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from PIL import Image, ImageChops, ImageStat
 
 from ddtools.preview import render_page
 from ddtools.textdump import page_texts
+
+if TYPE_CHECKING:
+    from ddtools.config import Character
 
 SCALE = 0.35
 THRESHOLD = 0.98
@@ -190,3 +194,64 @@ def compare(
         if score < threshold:
             problems.append(f"{name}: page {i + 1} looks different (similarity {score:.3f})")
     return problems
+
+
+# ---- per character (what `ddtools golden` runs) --------------------------
+
+
+def record_character(ch: Character, dest: Path, rebuild: bool) -> int:
+    """Capture a baseline for every document, from a fresh build or the committed PDFs.
+
+    Prints one line per document (and a warning per heading not found). Returns 1 if
+    the build fails, else 0.
+    """
+    from ddtools.build import BuildError, build_character
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf_dir = ch.dir / "pdf"
+        if rebuild:
+            pdf_dir = Path(tmp)
+            try:
+                build_character(ch.dir, pdf_dir)
+            except BuildError as err:
+                print(f"Build failed in {err.script}:\n{err.stderr}")
+                return 1
+        for doc in ch.documents:
+            stem = Path(doc.file).stem
+            data = capture(pdf_dir / f"{stem}.pdf", doc.source(ch.dir), dest, name=stem)
+            print(f"{stem}: {data['pages']} pages, {len(data['headings'])} headings")
+            for h in data["headings"]:
+                if h["page"] is None:
+                    print(f"  warning: heading not found in PDF text: {h['text']}")
+    return 0
+
+
+def check_character(ch: Character, dest: Path) -> int:
+    """Rebuild into a temporary folder and compare every document with its baseline.
+
+    Prints one line per document. Returns 1 if the build fails or anything differs.
+    No baseline folder yet is not a failure.
+    """
+    from ddtools.build import BuildError, build_character
+
+    if not dest.is_dir():
+        print(
+            f"{ch.name}: no golden baseline yet. "
+            f"Record one with `ddtools golden update {ch.dir.name}`."
+        )
+        return 0
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            build_character(ch.dir, Path(tmp))
+        except BuildError as err:
+            print(f"Build failed in {err.script}:\n{err.stderr}")
+            return 1
+        failed = False
+        for doc in ch.documents:
+            stem = Path(doc.file).stem
+            problems = compare(Path(tmp) / f"{stem}.pdf", doc.source(ch.dir), dest)
+            print(
+                f"{stem}: " + ("matches" if not problems else "\n  ".join(["differs", *problems]))
+            )
+            failed = failed or bool(problems)
+    return 1 if failed else 0

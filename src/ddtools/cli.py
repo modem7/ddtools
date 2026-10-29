@@ -1,22 +1,17 @@
 """Command-line entry point. Subcommands register themselves via ``command``.
 
 The commands live in ``ddtools.registry``; ``command`` and ``unregister`` are its
-helpers, re-exported here.
+helpers, re-exported here. This module parses arguments and dispatches; the output
+of summary, diff and watch is in ``ddtools.report``, and golden's in ``ddtools.golden``.
 """
 
 from __future__ import annotations
 
 import argparse
-from typing import TYPE_CHECKING
 
 from ddtools import __version__, plugins
 from ddtools.registry import COMMANDS, Configure, Handler, command, unregister
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from ddtools.config import Character
-    from ddtools.dndbeyond import SheetSummary
+from ddtools.report import print_json as _print_json
 
 __all__ = ["Configure", "Handler", "build_parser", "command", "main", "unregister"]
 
@@ -96,13 +91,11 @@ def _golden_args(p: argparse.ArgumentParser) -> None:
 
 @command("golden", "Record golden baselines for a character's documents.", _golden_args)
 def cmd_golden(args: argparse.Namespace) -> int:
-    import tempfile
     from pathlib import Path
 
-    from ddtools.build import BuildError, build_character
+    from ddtools import golden
     from ddtools.config import load_character
     from ddtools.errors import DdtoolsError
-    from ddtools.golden import capture
 
     try:
         ch = load_character(args.dir)
@@ -111,58 +104,11 @@ def cmd_golden(args: argparse.Namespace) -> int:
         return 1
     dest = Path.cwd() / "tests" / "golden" / ch.dir.name
     if args.action == "check":
-        return _golden_check(ch, dest)
+        return golden.check_character(ch, dest)
     if args.action == "capture" and not args.from_committed:
         print("`golden capture` needs --from-committed (use `golden update` to rebuild first).")
         return 2
-    with tempfile.TemporaryDirectory() as tmp:
-        pdf_dir = ch.dir / "pdf"
-        if args.action == "update":
-            pdf_dir = Path(tmp)
-            try:
-                build_character(ch.dir, pdf_dir)
-            except BuildError as err:
-                print(f"Build failed in {err.script}:\n{err.stderr}")
-                return 1
-        for doc in ch.documents:
-            stem = Path(doc.file).stem
-            data = capture(pdf_dir / f"{stem}.pdf", doc.source(ch.dir), dest, name=stem)
-            print(f"{stem}: {data['pages']} pages, {len(data['headings'])} headings")
-            for h in data["headings"]:
-                if h["page"] is None:
-                    print(f"  warning: heading not found in PDF text: {h['text']}")
-    return 0
-
-
-def _golden_check(ch: Character, dest: Path) -> int:
-    """Rebuild into a temporary folder and compare every document with its baseline."""
-    import tempfile
-    from pathlib import Path
-
-    from ddtools.build import BuildError, build_character
-    from ddtools.golden import compare
-
-    if not dest.is_dir():
-        print(
-            f"{ch.name}: no golden baseline yet. "
-            f"Record one with `ddtools golden update {ch.dir.name}`."
-        )
-        return 0
-    with tempfile.TemporaryDirectory() as tmp:
-        try:
-            build_character(ch.dir, Path(tmp))
-        except BuildError as err:
-            print(f"Build failed in {err.script}:\n{err.stderr}")
-            return 1
-        failed = False
-        for doc in ch.documents:
-            stem = Path(doc.file).stem
-            problems = compare(Path(tmp) / f"{stem}.pdf", doc.source(ch.dir), dest)
-            print(
-                f"{stem}: " + ("matches" if not problems else "\n  ".join(["differs", *problems]))
-            )
-            failed = failed or bool(problems)
-    return 1 if failed else 0
+    return golden.record_character(ch, dest, rebuild=args.action == "update")
 
 
 def _build_args(p: argparse.ArgumentParser) -> None:
@@ -208,12 +154,6 @@ def _is_dir(target: str) -> bool:
     return (Path(target) / "character.yaml").is_file()
 
 
-def _print_json(data) -> None:
-    import json
-
-    print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
-
-
 @command(
     "fetch",
     "Download a D&D Beyond sheet (into <dir>/snapshots/, or to stdout).",
@@ -239,30 +179,12 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _format_summary(s: SheetSummary) -> str:
-    from ddtools.dndbeyond import class_label
-
-    lines = [
-        f"{s['name']}: level {s['level']}, base HP {s['hp_base']}",
-        "Classes: " + ", ".join(class_label(c) for c in s["classes"]),
-        "Stats: " + ", ".join(f"{k} {v}" for k, v in s["stats"].items()),
-        "Spells:",
-        *[f"  {src}: {', '.join(names)}" for src, names in s["spells"].items()],
-        "Options: " + (", ".join(s["options"]) or "none"),
-        "Feats: " + (", ".join(s["feats"]) or "none"),
-        "Magic items: " + (", ".join(
-            i["name"] + (" (attuned)" if i["attuned"] else "") for i in s["items"] if i["magic"]
-        ) or "none"),
-        "Gold: " + ", ".join(f"{v} {k}" for k, v in s["gold"].items() if v),
-    ]  # fmt: skip
-    return "\n".join(lines)
-
-
 @command("summary", "Summarise a sheet: level, stats, spells by source, items, gold.", _target_args)
 def cmd_summary(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
     from ddtools.errors import DdtoolsError
+    from ddtools.report import format_summary
 
     try:
         if _is_dir(args.target):
@@ -277,7 +199,7 @@ def cmd_summary(args: argparse.Namespace) -> int:
         print(err)
         return 1
     s = ddb.summarise(data)
-    _print_json(s) if args.json else print(_format_summary(s))
+    _print_json(s) if args.json else print(format_summary(s))
     return 0
 
 
@@ -312,31 +234,6 @@ def cmd_party(args: argparse.Namespace) -> int:
     return 0
 
 
-def _format_diff(d: dict) -> list[str]:
-    lines = []
-    if d["level"]:
-        lines.append(f"Level: {d['level'][0]} → {d['level'][1]}")
-    for src, names in d["spells_added"].items():
-        lines.append(f"Spells added ({src}): {', '.join(names)}")
-    for src, names in d["spells_removed"].items():
-        lines.append(f"Spells removed ({src}): {', '.join(names)}")
-    for key, label in [
-        ("options_added", "Options added"), ("options_removed", "Options removed"),
-        ("feats_added", "Feats added"), ("feats_removed", "Feats removed"),
-        ("items_added", "Magic items added"), ("items_removed", "Magic items removed"),
-        ("attunement_changed", "Attunement/equipped changed"),
-    ]:  # fmt: skip
-        if d[key]:
-            lines.append(f"{label}: {', '.join(d[key])}")
-    for k, (a, b) in d["stats"].items():
-        lines.append(f"{k}: {a} → {b}")
-    if d["hp_base"]:
-        lines.append(f"Base HP: {d['hp_base'][0]} → {d['hp_base'][1]}")
-    if d["gold"]:
-        lines.append("Gold: " + ", ".join(f"{k} {a} → {b}" for k, (a, b) in d["gold"].items()))
-    return lines
-
-
 def _diff_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("dir", help="character folder")
     p.add_argument("files", nargs="*", help="two snapshot files to compare (default: latest two)")
@@ -352,6 +249,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
     from ddtools.config import load_character
     from ddtools.errors import DdtoolsError
+    from ddtools.report import diff_report
 
     try:
         files = [Path(f) for f in args.files] or ddb.latest_snapshots(load_character(args.dir))
@@ -363,15 +261,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
         print(err)
         return 1
     d = ddb.diff(old, new)
-    if args.json:
-        _print_json(d)
-        return 0
-    lines = _format_diff(d)
-    print(f"{files[-2].name} → {files[-1].name}")
-    print("\n".join(lines) if lines else "No changes.")
-    if d["level"]:
-        print("\nLevel-up checklist:")
-        print("\n".join(f"  [ ] {item}" for item in ddb.LEVELUP_CHECKLIST))
+    _print_json(d) if args.json else print(diff_report(files[-2].name, files[-1].name, d))
     return 0
 
 
@@ -387,39 +277,9 @@ def _watch_args(p: argparse.ArgumentParser) -> None:
     _watch_args,
 )
 def cmd_watch(args: argparse.Namespace) -> int:
-    import sys
-    from pathlib import Path
+    from ddtools.report import run_watch
 
-    from ddtools import dndbeyond as ddb
-    from ddtools.config import character_dirs, load_character
-    from ddtools.errors import DdtoolsError
-
-    try:
-        chars = [load_character(d) for d in (args.dirs or character_dirs(Path.cwd()))]
-    except DdtoolsError as err:
-        print(f"error: {err}", file=sys.stderr)
-        return 1
-    chars = [c for c in chars if c.status == "active"]
-    results = [ddb.watch_character(c) for c in chars]
-    errors = [e for r in results for e in r["errors"]]
-    changed = [r for r in results if r["own"] or r["party"]]
-    if args.json:
-        _print_json(results)
-    for r in changed:
-        title, body = ddb.issue_markdown(r)
-        if args.issue_dir:
-            out = Path(args.issue_dir)
-            out.mkdir(parents=True, exist_ok=True)
-            (out / f"{r['dir']}.md").write_text(f"{title}\n{body}", encoding="utf-8")
-        if not args.json:
-            print(f"{title}\n{body}")
-    for e in errors:
-        print(f"error: {e}", file=sys.stderr)
-    if errors:
-        return 1
-    if not changed and not args.json:
-        print("No changes.")
-    return 3 if changed else 0
+    return run_watch(args.dirs, as_json=args.json, issue_dir=args.issue_dir)
 
 
 def _check_args(p: argparse.ArgumentParser) -> None:

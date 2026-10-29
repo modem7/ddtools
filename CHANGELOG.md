@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Changed:** the runtime dependencies now have version bounds: at least the versions
+  ddtools is tested with, and below the next major version.
+
+  | Package | Range |
+  |---|---|
+  | pillow | `>=13.0.0,<14` |
+  | pypdf | `>=6.21.4,<7` |
+  | pypdfium2 | `>=5.14.0,<6` |
+  | PyYAML | `>=6.0.3,<7` |
+  | reportlab | `>=5.1.0,<6` |
+
+- **Changed:** the text of `summary`, `diff` and `watch` is now made in `ddtools.report`,
+  and `golden`'s capture and check runs are `ddtools.golden.record_character` and
+  `check_character`. `cli.py` only parses and dispatches. The output is unchanged.
+
 - **Changed:** the DejaVu fonts now come with the package, so `fonts-dejavu-core` no
   longer needs installing. `DDTOOLS_FONT_DIR` still overrides them.
 - **Changed:** `retire` and `import-workbook` are all or nothing. If a write or the move
