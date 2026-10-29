@@ -3,41 +3,57 @@
 Built from the character's campaign in ``character.yaml``: the party (still in it), the
 campaign facts, and ``campaign.workbook`` (audience, campaign_line, battlefield,
 not_allowed, example_place, combat_notes). The character's own row uses ``party_summary``.
-Form fields have stable, versioned names (``v1.s<section>.<label>``) so a filled workbook
-can be read back by ``ddtools import-workbook``.
+Form fields have stable, versioned names (``v1.s<section>.<label>``, see
+``ddtools.workbook_fields``) so a filled workbook can be read back by
+``ddtools import-workbook``.
+
+The workbook is a cover, the numbered sections in ``SECTIONS`` (each a heading plus a
+builder function), and a closing "Hand It to Claude" section.
 
 Run as a document script: ``script: ddtools:workbook`` in ``character.yaml``.
 """
 
 from __future__ import annotations
 
-import re
+import html
 import textwrap
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, NamedTuple
 
 from ddtools.config import Character, is_present, load_character, output_path, updated_label
-from ddtools.pdfstyle import *  # noqa: F403
+from ddtools.pdfstyle import (
+    ACCENT,
+    MUTED,
+    WARN_BG,
+    CondPageBreak,
+    Field,
+    Flowable,
+    KeepTogether,
+    P,
+    PageBreak,
+    ParagraphStyle,
+    Spacer,
+    Table,
+    Ticks,
+    bl,
+    body,
+    box,
+    build,
+    code,
+    colors,
+    h1,
+    h2,
+    mm,
+    small,
+    sub,
+    table,
+    title,
+)
+from ddtools.workbook_fields import field_key
 
 FILE = "Party_Character_Guide_Workbook.pdf"
-VERSION = "v1"
-_section = [0]
-TITLES: dict[int, str] = {0: "Start"}  # section number -> title, filled as the story is built
-
-
-def field_key(label: str) -> str:
-    """The stable name of a write-in field: its section and its label, as a slug."""
-    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:48].rstrip("-")
-    return f"{VERSION}.s{_section[0]}.{slug}"
-
-
-def field(label: str, lines: int = 3) -> Field:
-    return Field(label, lines, key=field_key(label))  # noqa: F405
-
-
-def ticks(options: Sequence[str], cols: int = 3, **kw: float) -> Ticks:
-    return Ticks(options, cols, key=field_key(options[0]), **kw)  # noqa: F405
-
 
 NUMBERS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
 
@@ -47,48 +63,71 @@ EX_BG = colors.HexColor("#f5f0ea")
 EX_EDGE = MUTED
 
 
+@dataclass
+class _Workbook:
+    """What the section builders need: the character, its campaign's workbook options and
+    teammates, and the number of the section being built (it names the form fields)."""
+
+    ch: Character
+    options: dict[str, Any]  # campaign.workbook
+    party: list[dict[str, Any]]  # teammates still in the party
+    section: int = 0
+
+    @classmethod
+    def of(cls, ch: Character) -> _Workbook:
+        party = [p for p in ch.campaign.get("party") or [] if is_present(ch, p["name"])]
+        return cls(ch, ch.campaign.get("workbook") or {}, party)
+
+    @property
+    def first(self) -> str:
+        """The character's first name."""
+        return self.ch.name.split(" ")[0]
+
+    def field(self, label: str, lines: int = 3) -> Field:
+        return Field(label, lines, key=field_key(self.section, label))
+
+    def ticks(self, options: Sequence[str], cols: int = 3, **kw: float) -> Ticks:
+        return Ticks(options, cols, key=field_key(self.section, options[0]), **kw)
+
+
+class _Section(NamedTuple):
+    """A numbered section: its heading, and the function that builds the rest."""
+
+    num: int
+    name: str  # Paragraph markup, e.g. "Build &amp; Levelling"
+    mins: int
+    build: Callable[[_Workbook], list[Flowable]]
+    why: str
+    skip: str | None = None
+
+
 def example(t: str) -> Table:
     return box([P("<b>Example (Mossy):</b> " + t, small)], bg=EX_BG, edge=EX_EDGE)
 
 
-def section(
-    num: int, name: str, mins: int | str, why: str, skip: str | None = None
-) -> list[Flowable]:
-    _section[0] = num
-    TITLES[num] = name
-    out = [CondPageBreak(70 * mm), P(f"{num}. {name}", h1)]
-    tag = f"<font color='#5b544c'><b>Time:</b> about {mins} min"
-    if skip:
-        tag += f"  ·  Skip if: {skip}"
+def _heading(s: _Section) -> list[Flowable]:
+    out = [CondPageBreak(70 * mm), P(f"{s.num}. {s.name}", h1)]
+    tag = f"<font color='#5b544c'><b>Time:</b> about {s.mins} min"
+    if s.skip:
+        tag += f"  ·  Skip if: {s.skip}"
     tag += "</font>"
-    out += [P(tag, small), Spacer(1, 3), P("<b>Why:</b> " + why, body)]
+    out += [P(tag, small), Spacer(1, 3), P("<b>Why:</b> " + s.why, body)]
     return out
 
 
-def prompts(items: Iterable[str]) -> list[Paragraph]:
-    return bl(items)
-
-
-def story(CH: Character) -> list[Flowable]:
-    """The workbook's flowables, for a character."""
-    PARTY = [p for p in CH.campaign.get("party") or [] if is_present(CH, p["name"])]
-    WB = CH.campaign.get("workbook") or {}
-    FIRST = CH.name.split(" ")[0]
-    LINKS = NUMBERS[1 + len(PARTY)] if 1 + len(PARTY) < len(NUMBERS) else str(1 + len(PARTY))
-    _section[0] = 0
-    S: list[Flowable] = []
-
-    # ---------------- Cover ----------------
-    S.append(P("Your Character Guide", title))
-    S.append(
+def _cover(wb: _Workbook) -> list[Flowable]:
+    """The cover: how it works, the ground rules, the short version, the tracker."""
+    out: list[Flowable] = []
+    out.append(P("Your Character Guide", title))
+    out.append(
         P(
-            f"A workbook for {WB.get('audience', 'your party')} · Fill it in, hand it to Claude, get back your own guide: "
+            f"A workbook for {wb.options.get('audience', 'your party')} · Fill it in, hand it to Claude, get back your own guide: "
             "levelling plan, combat cheat sheet, role-play help and DM notes.",
             sub,
         )
     )
 
-    S.append(
+    out.append(
         box(
             [
                 P("<b>How this works, in 3 steps</b>", body),
@@ -107,8 +146,8 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(Spacer(1, 6))
-    S.append(
+    out.append(Spacer(1, 6))
+    out.append(
         box(
             [
                 P("<b>The ground rules</b>", body),
@@ -133,9 +172,11 @@ def story(CH: Character) -> list[Flowable]:
         )
     )
 
-    S.append(P("The Short Version", h2))
-    S.append(P("Only got 10 minutes? Do these three and you’ll already get a useful guide:", body))
-    S.append(
+    out.append(P("The Short Version", h2))
+    out.append(
+        P("Only got 10 minutes? Do these three and you’ll already get a useful guide:", body)
+    )
+    out.append(
         table(
             [
                 ["", "Do this", "Section"],
@@ -147,12 +188,12 @@ def story(CH: Character) -> list[Flowable]:
         )
     )
 
-    S.append(P("Progress Tracker", h2))
-    S.append(
+    out.append(P("Progress Tracker", h2))
+    out.append(
         P("Tick sections off as you go. Tick “skipped” too: skipping is a valid choice.", small)
     )
-    S.append(Spacer(1, 3))
-    S.append(
+    out.append(Spacer(1, 3))
+    out.append(
         table(
             [
                 ["", "Section", "Time", "", "Section", "Time"],
@@ -196,12 +237,12 @@ def story(CH: Character) -> list[Flowable]:
         )
     )
 
-    S.append(Spacer(1, 6))
-    S.append(
+    out.append(Spacer(1, 6))
+    out.append(
         box(
             [
                 P(
-                    f"<b>What you get back.</b> The same kind of guide {FIRST}’s player has: a quick-start summary, a <b>combat cheat sheet</b> for "
+                    f"<b>What you get back.</b> The same kind of guide {wb.first}’s player has: a quick-start summary, a <b>combat cheat sheet</b> for "
                     "your current level, a levelling plan, <b>how to play your character</b> (especially in party scenes), your relationships "
                     "with each teammate, and a <b>DM notes</b> section with story hooks. You can also ask for a short <b>party handout</b> "
                     "(no spoilers) and a separate <b>DM brief</b>.",
@@ -210,23 +251,21 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
+    return out
 
-    # ---------------- 1 ----------------
-    S += section(
-        1,
-        "The Basics",
-        3,
-        "the character sheet does most of the work. Claude can read your D&amp;D Beyond character directly, "
-        "so it knows your stats, spells, items and features without you typing them out.",
+
+def _basics(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(wb.field("Character name", 1))
+    out.append(wb.field("Player name (and what to call you)", 1))
+    out.append(
+        wb.field(
+            "Race / class / subclass / level  (e.g. “Human Gunslinger, High Roller, level 3”)", 1
+        )
     )
-    S.append(field("Character name", 1))
-    S.append(field("Player name (and what to call you)", 1))
-    S.append(
-        field("Race / class / subclass / level  (e.g. “Human Gunslinger, High Roller, level 3”)", 1)
-    )
-    S.append(field("D&D Beyond link  (e.g. https://www.dndbeyond.com/characters/12345678)", 1))
-    S.append(Spacer(1, 4))
-    S.append(
+    out.append(wb.field("D&D Beyond link  (e.g. https://www.dndbeyond.com/characters/12345678)", 1))
+    out.append(Spacer(1, 4))
+    out.append(
         box(
             [
                 P("<b>Make your character readable first</b>", body),
@@ -240,19 +279,14 @@ def story(CH: Character) -> list[Flowable]:
             bg=WARN_BG,
         )
     )
+    return out
 
-    # ---------------- 2 ----------------
-    S += section(
-        2,
-        "The One-Line Pitch",
-        3,
-        "one sentence gives Claude (and you) a compass. Every time you’re unsure what your character would do, "
-        "you can check it against this.",
-        "you really can’t think of one. Claude can suggest a few from your backstory.",
-    )
-    S.append(P("Try one of these formulas:", body))
-    S.extend(
-        prompts(
+
+def _pitch(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(P("Try one of these formulas:", body))
+    out.extend(
+        bl(
             [
                 "<b>[Famous character] meets [another famous character].</b>",
                 "<b>A [adjective] [role] who wants [goal] but [problem].</b>",
@@ -260,8 +294,8 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(field("Your pitch", 2))
-    S.append(
+    out.append(wb.field("Your pitch", 2))
+    out.append(
         box(
             [
                 P(
@@ -272,22 +306,19 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(Spacer(1, 3))
-    S.append(
+    out.append(Spacer(1, 3))
+    out.append(
         example(
             "“<i>Mary Poppins meets Gordon Ramsay</i>”: a cheerful, bossy nanny type who judges everyone’s cooking."
         )
     )
+    return out
 
-    # ---------------- 3 ----------------
-    S += section(
-        3,
-        "Backstory",
-        5,
-        "this is where DM hooks and role-play ideas come from. Even a messy paragraph gives Claude a lot to work with.",
-    )
-    S.extend(
-        prompts(
+
+def _backstory(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.extend(
+        bl(
             [
                 "Paste your backstory as it is. Long, short, or bullet points.",
                 "If you have two versions (a short one the party knows and a longer private one), paste both and say which is which.",
@@ -295,27 +326,23 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(field("Backstory (or where to find it, e.g. “it’s on my D&D Beyond sheet”)", 9))
-    S.append(field("What the rest of the party already knows about you", 2))
-    S.append(field("What the party doesn’t know yet (secrets). Goes in your DM notes only", 3))
-    S.append(
+    out.append(wb.field("Backstory (or where to find it, e.g. “it’s on my D&D Beyond sheet”)", 9))
+    out.append(wb.field("What the rest of the party already knows about you", 2))
+    out.append(wb.field("What the party doesn’t know yet (secrets). Goes in your DM notes only", 3))
+    out.append(
         example(
             "The party knows she was sacked from the royal kitchens after a lord was poisoned at a banquet. "
             "They don’t know that she was the one who poisoned him, or why."
         )
     )
+    return out
 
-    # ---------------- 4 ----------------
-    S += section(
-        4,
-        "What You Want From Your Character",
-        5,
-        "a guide should be built around what <i>you</i> find fun and what you find hard, "
-        "not just what’s mathematically strongest.",
-    )
-    S.append(P("In combat, I mostly want to… <font color='#5b544c'>(tick any)</font>", step))
-    S.append(
-        ticks(
+
+def _wants(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(P("In combat, I mostly want to… <font color='#5b544c'>(tick any)</font>", step))
+    out.append(
+        wb.ticks(
             [
                 "Deal big damage",
                 "Hit lots of enemies at once",
@@ -332,14 +359,14 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(
+    out.append(
         P(
             "I find these hard… <font color='#5b544c'>(tick any. This is the most useful box in the workbook)</font>",
             step,
         )
     )
-    S.append(
-        ticks(
+    out.append(
+        wb.ticks(
             [
                 "Knowing what to say in party chat",
                 "Talking to NPCs",
@@ -357,30 +384,25 @@ def story(CH: Character) -> list[Flowable]:
             cols=2,
         )
     )
-    S.append(
-        field(
+    out.append(
+        wb.field(
             "Anything else you want from this character (a story arc, a vibe, a moment you’re hoping for)",
             3,
         )
     )
-    S.append(
+    out.append(
         example(
             "Control first, support second. Wants a slow arc about forgiving herself. Finds talking to NPCs the hardest part, so the guide gives her "
             "“go-to moves” to use when she’s stuck."
         )
     )
+    return out
 
-    # ---------------- 5 ----------------
-    S += section(
-        5,
-        "Build &amp; Levelling",
-        5,
-        "Claude can plan your next levels, check your choices against the house rules, and turn it all "
-        "into a one-page cheat sheet.",
-        "you’d rather Claude suggest a plan from scratch. Just tick the first box.",
-    )
-    S.append(
-        ticks(
+
+def _build_and_levelling(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
+        wb.ticks(
             [
                 "Suggest a plan for me",
                 "I have a plan, check it",
@@ -392,39 +414,31 @@ def story(CH: Character) -> list[Flowable]:
             cols=3,
         )
     )
-    S.append(field("Your plan, or a link / name of the build you’re following", 3))
-    S.append(field("Choices you’re unsure about (spells, feats, multiclassing, items)", 2))
-    S.append(
+    out.append(wb.field("Your plan, or a link / name of the build you’re following", 3))
+    out.append(wb.field("Choices you’re unsure about (spells, feats, multiclassing, items)", 2))
+    out.append(
         example(
             "Following a Spores Druid build from a YouTube guide. Unsure whether to take War Caster or Resilient (CON) first."
         )
     )
+    return out
 
-    # ---------------- 6 ----------------
-    S += section(
-        6,
-        "Skills &amp; What You’re Good At",
-        3,
-        "most of the game isn’t combat. Knowing your best skills tells you when to step forward.",
-    )
-    S.append(
-        field(
+
+def _skills(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
+        wb.field(
             "Your top 3 skills or tools, and when they matter  (e.g. “Stealth: scouting ahead”)", 3
         )
     )
-    S.append(field("Things only you in the party can do", 2))
-    S.append(field("Things you’re bad at (useful for funny or dramatic moments)", 2))
+    out.append(wb.field("Things only you in the party can do", 2))
+    out.append(wb.field("Things you’re bad at (useful for funny or dramatic moments)", 2))
+    return out
 
-    # ---------------- 7 ----------------
-    S += section(
-        7,
-        "Personality &amp; Voice",
-        10,
-        "this becomes the “how to play them” part of your guide: ready-made lines and reactions "
-        "you can reach for mid-session.",
-        "you’d rather describe the vibe and let Claude write the rest.",
-    )
-    S.append(
+
+def _personality(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
         table(
             [
                 ["", "Prompt", "Example (Mossy)"],
@@ -452,11 +466,11 @@ def story(CH: Character) -> list[Flowable]:
             [18, 72, 80],
         )
     )
-    S.append(field("Traits, ideals, bonds, flaws", 4))
-    S.append(field("How they talk (accent, speed, favourite words, nicknames for people)", 2))
-    S.append(field("2–3 catchphrases or things they’d say", 2))
-    S.append(Spacer(1, 3))
-    S.append(
+    out.append(wb.field("Traits, ideals, bonds, flaws", 4))
+    out.append(wb.field("How they talk (accent, speed, favourite words, nicknames for people)", 2))
+    out.append(wb.field("2–3 catchphrases or things they’d say", 2))
+    out.append(Spacer(1, 3))
+    out.append(
         box(
             [
                 P(
@@ -472,51 +486,43 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(field("Your character’s modes (optional)", 3))
+    out.append(wb.field("Your character’s modes (optional)", 3))
+    return out
 
-    # ---------------- 8 ----------------
-    S += section(
-        8,
-        "The People in Your Life",
-        5,
-        "NPCs are the DM’s easiest hooks. Every name you give is a story waiting to happen.",
-        "your backstory already covers it.",
-    )
-    S.append(
-        field(
+
+def _people(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
+        wb.field(
             "Family, mentors, rivals, enemies, patrons, gods, exes, debts. Name + one line on each",
             5,
         )
     )
-    S.append(
+    out.append(
         example(
             "<b>Lord Hallowmere</b>, the noble who was poisoned (and survived). <b>Chef Barrow</b>, her old boss, who fired her. "
             "<b>Old Mother Cap</b>, the talking mushroom who taught her druid magic."
         )
     )
+    return out
 
-    # ---------------- 9 ----------------
-    S += section(
-        9,
-        "You and the Party",
-        10,
-        "party scenes are where most people get stuck. A clear idea of how you feel about each "
-        "teammate gives you something to say.",
-    )
-    S.append(
+
+def _party(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
         P(
             "Your teammates. Their D&amp;D Beyond links are included so Claude can read their sheets too.",
             body,
         )
     )
-    S.append(
+    out.append(
         table(
             [
                 ["Character", "What we know", "D&amp;D Beyond"],
                 [
-                    f"<b>{CH.name}</b>",
-                    CH.party_summary,
-                    f"dndbeyond.com/characters/{CH.dndbeyond_id}",
+                    f"<b>{wb.ch.name}</b>",
+                    wb.ch.party_summary,
+                    f"dndbeyond.com/characters/{wb.ch.dndbeyond_id}",
                 ],
                 *[
                     [
@@ -524,16 +530,16 @@ def story(CH: Character) -> list[Flowable]:
                         p.get("summary", ""),
                         f"dndbeyond.com/characters/{p['dndbeyond_id']}",
                     ]
-                    for p in PARTY
+                    for p in wb.party
                 ],
             ],
             [34, 86, 50],
         )
     )
-    S.append(Spacer(1, 4))
-    S.append(P("For each teammate (skip yourself), answer any of these:", body))
-    S.extend(
-        prompts(
+    out.append(Spacer(1, 4))
+    out.append(P("For each teammate (skip yourself), answer any of these:", body))
+    out.extend(
+        bl(
             [
                 "What do you <b>think of them</b>? (Trust, annoyed by, impressed by, protective of, suspicious of…)",
                 "What would you <b>tease them about</b>? What would you <b>ask them</b>?",
@@ -541,117 +547,106 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    for who in [FIRST] + [p["name"].split(" ")[0] for p in PARTY]:
-        S.append(field(who, 2))
-    S.append(Spacer(1, 3))
-    S.append(
+    for who in [wb.first] + [p["name"].split(" ")[0] for p in wb.party]:
+        out.append(wb.field(who, 2))
+    out.append(Spacer(1, 3))
+    out.append(
         example(
             "Mossy treats her party’s barbarian like a child who needs feeding: she packs them labelled lunches, "
             "and takes it personally when they eat monster meat instead."
         )
     )
+    return out
 
-    # ---------------- 10 ----------------
-    S += section(
-        10,
-        "Running Gags &amp; Side Projects",
-        5,
-        "a recurring bit gives you something to do in every scene without having to "
-        "think of something new.",
-        "nothing comes to mind. These often appear on their own after a few sessions.",
-    )
-    S.append(field("A habit, an object, a catchphrase or a bit you keep coming back to", 3))
-    S.append(field("Something they do in downtime (a job, a hobby, a scheme, a project)", 3))
-    S.append(
+
+def _running_gags(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(wb.field("A habit, an object, a catchphrase or a bit you keep coming back to", 3))
+    out.append(wb.field("Something they do in downtime (a job, a hobby, a scheme, a project)", 3))
+    out.append(
         example(
             "<b>The star ratings</b>: she rates every meal the party eats out of five, out loud, including the ones cooked by enemies. "
             "<b>In downtime</b> she sells “dungeon-safe” mushroom jerky."
         )
     )
+    return out
 
-    # ---------------- 11 ----------------
-    S += section(
-        11,
-        "In Combat",
-        5,
-        "your cheat sheet will list your best move for each situation, so you’re not scrolling through "
-        "your sheet when it’s your turn.",
-    )
-    S.append(field("What do you usually do on your turn right now?", 2))
-    S.append(
-        field(
+
+def _combat(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(wb.field("What do you usually do on your turn right now?", 2))
+    out.append(
+        wb.field(
             "What do you use your bonus action and reaction for? (or “I always forget I have them”)",
             2,
         )
     )
-    S.append(field("Situations where you’re not sure what to do", 2))
-    for note in WB.get("combat_notes") or []:
-        S.append(Spacer(1, 3))
-        S.append(box([P(note, small)], bg=WARN_BG))
+    out.append(wb.field("Situations where you’re not sure what to do", 2))
+    for note in wb.options.get("combat_notes") or []:
+        out.append(Spacer(1, 3))
+        out.append(box([P(note, small)], bg=WARN_BG))
+    return out
 
-    # ---------------- 12 ----------------
-    S += section(
-        12,
-        "Hooks, Secrets &amp; Limits",
-        5,
-        "this becomes the DM notes section. It helps the DM give your character "
-        "story moments you’ll actually enjoy.",
+
+def _hooks(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
+        wb.field("Story moments you’d love to see (a reunion, a rival, a reveal, a big choice)", 3)
     )
-    S.append(
-        field("Story moments you’d love to see (a reunion, a rival, a reveal, a big choice)", 3)
-    )
-    S.append(
-        field(
+    out.append(
+        wb.field(
             "Where you’d like the character to end up (redemption, revenge, power, home, a surprise)",
             2,
         )
     )
-    S.append(
-        field(
+    out.append(
+        wb.field(
             "Things you’d rather avoid in your character’s story (topics, situations, anything)", 2
         )
     )
-    S.append(
+    out.append(
         example(
-            f"Would love: Lord Hallowmere turning up in {WB.get('example_place', 'town')}, and a teammate finding out a big secret from her past."
+            f"Would love: Lord Hallowmere turning up in {wb.options.get('example_place', 'town')}, and a teammate finding out a big secret from her past."
         )
     )
+    return out
 
-    # ---------------- 13 ----------------
-    S += section(
-        13,
-        "Questions for the DM",
-        3,
-        "writing down rules questions stops them getting lost, and the guide can track the answers.",
-        "you have none. You can always add them later.",
-    )
-    S.append(
-        field(
+
+def _dm_questions(wb: _Workbook) -> list[Flowable]:
+    out: list[Flowable] = []
+    out.append(
+        wb.field(
             "Anything you’re unsure about (house rules, how a feature works here, anything unclear)",
             3,
         )
     )
-    S.append(Spacer(1, 3))
-    S.append(P("Campaign Facts (so Claude gets them right)", h2))
-    S.append(
+    out.append(Spacer(1, 3))
+    out.append(P("Campaign Facts (so Claude gets them right)", h2))
+    out.append(
         table(
             [
                 ["", ""],
-                *[[f"<b>{f['label']}</b>", f["text"]] for f in CH.campaign.get("facts") or []],
+                *[[f"<b>{f['label']}</b>", f["text"]] for f in wb.ch.campaign.get("facts") or []],
             ],
             [30, 140],
             header=False,
         )
     )
+    return out
 
-    # ---------------- 14 ----------------
-    S.append(PageBreak())
-    S.append(P("14. Hand It to Claude", h1))
-    S.append(P("First: What Claude Needs (one time, 2 minutes)", h2))
-    S.append(
+
+def _hand_it_to_claude(wb: _Workbook) -> list[Flowable]:
+    """The last section: what Claude needs, the prompts to paste, and follow-ups."""
+    n = 1 + len(wb.party)
+    links = NUMBERS[n] if n < len(NUMBERS) else str(n)
+    out: list[Flowable] = []
+    out.append(PageBreak())
+    out.append(P("14. Hand It to Claude", h1))
+    out.append(P("First: What Claude Needs (one time, 2 minutes)", h2))
+    out.append(
         P("These are the only things used to make the guides. No plugins or extra add-ons.", body)
     )
-    S.append(
+    out.append(
         table(
             [
                 ["Claude needs to…", "What to do"],
@@ -675,20 +670,20 @@ def story(CH: Character) -> list[Flowable]:
             [44, 126],
         )
     )
-    S.append(P("Then: Paste the Prompt", h2))
-    S.append(
+    out.append(P("Then: Paste the Prompt", h2))
+    out.append(
         P(
             "Start a new chat in Claude (or a new Claude Code session), attach this filled-in PDF (or paste your answers), and copy in the prompt below. "
             "Change anything in [brackets].",
             body,
         )
     )
-    S.append(Spacer(1, 3))
-    S.append(
+    out.append(Spacer(1, 3))
+    out.append(
         code(
             [
                 *textwrap.wrap(
-                    f"I play [character name] in {WB.get('campaign_line', 'a D&D 5e campaign')}. "
+                    f"I play [character name] in {wb.options.get('campaign_line', 'a D&D 5e campaign')}. "
                     "I've attached my filled-in character workbook.",
                     73,
                 ),
@@ -698,18 +693,18 @@ def story(CH: Character) -> list[Flowable]:
                 " https://character-service.dndbeyond.com/character/v5/character/[your ID] )",
                 "",
                 "My party (read their sheets too):",
-                f" {CH.name:<20}https://www.dndbeyond.com/characters/{CH.dndbeyond_id}",
+                f" {wb.ch.name:<20}https://www.dndbeyond.com/characters/{wb.ch.dndbeyond_id}",
                 *[
                     f" {p['name']:<20}https://www.dndbeyond.com/characters/{p['dndbeyond_id']}"
-                    for p in PARTY
+                    for p in wb.party
                 ],
                 "",
                 "Please make me a character guide as a PDF, with:",
                 " 1. A one-page summary of who my character is and where I am now",
                 " 2. A combat cheat sheet for my current level (action, bonus action,",
                 *(
-                    [f"    reaction), including where I'm fighting on {WB['battlefield']}"]
-                    if WB.get("battlefield")
+                    [f"    reaction), including where I'm fighting on {wb.options['battlefield']}"]
+                    if wb.options.get("battlefield")
                     else ["    reaction)"]
                 ),
                 " 3. A levelling plan for the next few levels, with reasons",
@@ -723,7 +718,7 @@ def story(CH: Character) -> list[Flowable]:
                 " - Read my sheet, and the campaign guide if I've attached it. Where",
                 "   they disagree, follow my sheet and list it as a question for the DM.",
                 " - Only use content the campaign allows"
-                + (f" ({WB['not_allowed']})." if WB.get("not_allowed") else "."),
+                + (f" ({wb.options['not_allowed']})." if wb.options.get("not_allowed") else "."),
                 " - Give your own recommendations with reasons, even if they differ",
                 "   from any build guide I mention.",
                 " - If a rule is unclear, write your assumption and mark it 'check with",
@@ -744,13 +739,13 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(Spacer(1, 6))
-    S.append(
+    out.append(Spacer(1, 6))
+    out.append(
         KeepTogether(
             [
                 P("One More: All Three PDFs at Once", h2),
                 P(
-                    f"Want the full set, like {FIRST}’s player has? Use this after the main prompt (or instead of it):",
+                    f"Want the full set, like {wb.first}’s player has? Use this after the main prompt (or instead of it):",
                     body,
                 ),
                 Spacer(1, 3),
@@ -784,16 +779,16 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
-    S.append(CondPageBreak(80 * mm))
-    S.append(P("Useful Follow-Ups", h2))
-    S.append(P("Once you have your guide, you can ask Claude for more. Copy any of these:", body))
-    S.append(
+    out.append(CondPageBreak(80 * mm))
+    out.append(P("Useful Follow-Ups", h2))
+    out.append(P("Once you have your guide, you can ask Claude for more. Copy any of these:", body))
+    out.append(
         table(
             [
                 ["Ask for", "Prompt"],
                 [
                     "<b>A party overview</b>",
-                    f"“Read all {LINKS} D&amp;D Beyond links and give me a party overview: who does what, gaps we have, and combos between us.”",
+                    f"“Read all {links} D&amp;D Beyond links and give me a party overview: who does what, gaps we have, and combos between us.”",
                 ],
                 [
                     "<b>A party handout</b>",
@@ -823,8 +818,8 @@ def story(CH: Character) -> list[Flowable]:
             [36, 134],
         )
     )
-    S.append(Spacer(1, 6))
-    S.append(
+    out.append(Spacer(1, 6))
+    out.append(
         box(
             [
                 P(
@@ -835,15 +830,142 @@ def story(CH: Character) -> list[Flowable]:
             ]
         )
     )
+    return out
 
-    return S
+
+# The numbered sections, in order. "Hand It to Claude" (14) follows them and has no fields.
+SECTIONS = [
+    _Section(
+        1,
+        "The Basics",
+        3,
+        _basics,
+        why="the character sheet does most of the work. Claude can read your D&amp;D Beyond character directly, "
+        "so it knows your stats, spells, items and features without you typing them out.",
+    ),
+    _Section(
+        2,
+        "The One-Line Pitch",
+        3,
+        _pitch,
+        why="one sentence gives Claude (and you) a compass. Every time you’re unsure what your character would do, "
+        "you can check it against this.",
+        skip="you really can’t think of one. Claude can suggest a few from your backstory.",
+    ),
+    _Section(
+        3,
+        "Backstory",
+        5,
+        _backstory,
+        why="this is where DM hooks and role-play ideas come from. Even a messy paragraph gives Claude a lot to work with.",
+    ),
+    _Section(
+        4,
+        "What You Want From Your Character",
+        5,
+        _wants,
+        why="a guide should be built around what <i>you</i> find fun and what you find hard, "
+        "not just what’s mathematically strongest.",
+    ),
+    _Section(
+        5,
+        "Build &amp; Levelling",
+        5,
+        _build_and_levelling,
+        why="Claude can plan your next levels, check your choices against the house rules, and turn it all "
+        "into a one-page cheat sheet.",
+        skip="you’d rather Claude suggest a plan from scratch. Just tick the first box.",
+    ),
+    _Section(
+        6,
+        "Skills &amp; What You’re Good At",
+        3,
+        _skills,
+        why="most of the game isn’t combat. Knowing your best skills tells you when to step forward.",
+    ),
+    _Section(
+        7,
+        "Personality &amp; Voice",
+        10,
+        _personality,
+        why="this becomes the “how to play them” part of your guide: ready-made lines and reactions "
+        "you can reach for mid-session.",
+        skip="you’d rather describe the vibe and let Claude write the rest.",
+    ),
+    _Section(
+        8,
+        "The People in Your Life",
+        5,
+        _people,
+        why="NPCs are the DM’s easiest hooks. Every name you give is a story waiting to happen.",
+        skip="your backstory already covers it.",
+    ),
+    _Section(
+        9,
+        "You and the Party",
+        10,
+        _party,
+        why="party scenes are where most people get stuck. A clear idea of how you feel about each "
+        "teammate gives you something to say.",
+    ),
+    _Section(
+        10,
+        "Running Gags &amp; Side Projects",
+        5,
+        _running_gags,
+        why="a recurring bit gives you something to do in every scene without having to "
+        "think of something new.",
+        skip="nothing comes to mind. These often appear on their own after a few sessions.",
+    ),
+    _Section(
+        11,
+        "In Combat",
+        5,
+        _combat,
+        why="your cheat sheet will list your best move for each situation, so you’re not scrolling through "
+        "your sheet when it’s your turn.",
+    ),
+    _Section(
+        12,
+        "Hooks, Secrets &amp; Limits",
+        5,
+        _hooks,
+        why="this becomes the DM notes section. It helps the DM give your character "
+        "story moments you’ll actually enjoy.",
+    ),
+    _Section(
+        13,
+        "Questions for the DM",
+        3,
+        _dm_questions,
+        why="writing down rules questions stops them getting lost, and the guide can track the answers.",
+        skip="you have none. You can always add them later.",
+    ),
+]
+
+
+def section_titles(ch: Character) -> dict[int, str]:
+    """Section number -> title, as plain text (0 is the cover, "Start"). Builds nothing."""
+    return {0: "Start"} | {s.num: html.unescape(s.name) for s in SECTIONS}
+
+
+def story(ch: Character) -> list[Flowable]:
+    """The workbook's flowables, for a character."""
+    wb = _Workbook.of(ch)
+    out = _cover(wb)
+    for s in SECTIONS:
+        wb.section = s.num
+        out += _heading(s)
+        out += s.build(wb)
+    out += _hand_it_to_claude(wb)
+    return out
 
 
 def build_workbook(ch: Character | None = None) -> Path:
     """Write the workbook PDF for ``ch`` (default: the character being built)."""
     ch = ch or load_character()
     out = output_path(ch, FILE)
-    build(story(ch), out, f"Your Character Guide — Workbook · {updated_label(ch)}")  # noqa: F405
+    build(story(ch), out, f"Your Character Guide — Workbook · {updated_label(ch)}")
     return out
 
 

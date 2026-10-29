@@ -26,6 +26,12 @@
   if you pass them by keyword: `load_character`, `build_character`, `retire`,
   `import_workbook`, `set_top_level`, `set_party_fields`, `add_party_member` and
   `sheettext.load_source`.
+- **Changed:** `ddtools.workbook` is split into one function per section. The workbook
+  PDF is the same. `section_titles(ch)` gives the section titles without building it,
+  and `ddtools.workbook_fields` has the field names (`field_key`, `section_of`) for the
+  workbook and `import-workbook`. `field_key` now takes the section too:
+  `field_key(section, label)`. It still imports from `ddtools.workbook`. `TITLES`,
+  `VERSION`, `field`, `ticks`, `section` and `prompts` are gone from `ddtools.workbook`.
 - **Fixed:** a plugin command named like a built-in one (say `build`) no longer stops
   every command with an argparse error. It is skipped with a warning, as is a name an
   earlier plugin already took. The first one wins, and the rest of the plugin loads.
