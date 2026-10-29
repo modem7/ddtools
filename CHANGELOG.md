@@ -9,7 +9,8 @@
 - **Changed:** ddtools' errors share one base, `ddtools.errors.DdtoolsError`. A missing
   character folder, a bad snapshot or baseline file, a party member with no name or
   `dndbeyond_id`, or a missing workbook PDF now gives a message naming the file, not a
-  traceback.
+  traceback. A party member's `name` must be text: write `name: "1984"` (or `"No"`) in
+  quotes, or `load_character` reports which `campaign.party` entry is wrong.
 - **Changed:** clearer names in `ddtools.config` for build scripts. The old names still
   work, so existing build scripts need no change.
 
@@ -25,7 +26,7 @@
   if you pass them by keyword: `load_character`, `build_character`, `retire`,
   `import_workbook`, `set_top_level`, `set_party_fields`, `add_party_member` and
   `sheettext.load_source`.
-- **Changed:** `ddtools.sheettext.status` is now `field_status`.
+- **Changed:** `ddtools.sheettext.status` is now `field_status`. The old name still works.
 
 ## 0.2.0
 
