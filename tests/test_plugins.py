@@ -141,3 +141,10 @@ def test_a_bare_api_still_works(clean_plugins):
     api.command("wave", "Wave.", lambda p: None)(lambda args: 0)
     api.sheet_text_block("weather", lambda ch, names: "Sunny")
     assert "wave" in COMMANDS and "weather" in plugins.blocks()
+
+
+def test_a_repeat_load_returns_no_warnings_but_keeps_them(clean_plugins):
+    broken = FakeEntryPoint("broken", ImportError("no module named nowhere"))
+    assert len(plugins.load([broken])) == 1
+    assert plugins.load([broken]) == []
+    assert len(plugins._host.warnings) == 1

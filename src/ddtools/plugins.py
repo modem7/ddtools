@@ -34,7 +34,11 @@ class Host:
         self.loaded = False
 
     def load(self, eps: Iterable[Any] | None = None) -> list[str]:
-        """Load the plugins once (``eps``: entry points, for tests). Returns warnings."""
+        """Load the plugins once (``eps``: entry points, for tests).
+
+        Returns the warnings on the first call and ``[]`` after, so a caller that prints
+        them (``build_parser``) prints each once; ``self.warnings`` keeps them all.
+        """
         if self.loaded:
             return []
         self.loaded = True
@@ -102,7 +106,10 @@ def _installed() -> list[Any]:
 
 
 def load(eps: Iterable[Any] | None = None) -> list[str]:
-    """Load the plugins once (``eps``: entry points, for tests). Returns warnings."""
+    """Load the plugins once (``eps``: entry points, for tests).
+
+    Returns the warnings on the first call and ``[]`` after.
+    """
     return _host.load(eps)
 
 
