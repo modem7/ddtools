@@ -29,8 +29,9 @@
 - **Changed:** `ddtools.workbook` is split into one function per section. The workbook
   PDF is the same. `section_titles(ch)` gives the section titles without building it,
   and `ddtools.workbook_fields` has the field names (`field_key`, `section_of`) for the
-  workbook and `import-workbook`. `TITLES`, `VERSION`, `field_key`, `field`, `ticks`,
-  `section` and `prompts` are gone from `ddtools.workbook`.
+  workbook and `import-workbook`. `field_key` now takes the section too:
+  `field_key(section, label)`. It still imports from `ddtools.workbook`. `TITLES`,
+  `VERSION`, `field`, `ticks`, `section` and `prompts` are gone from `ddtools.workbook`.
 
 ## 0.2.0
 
