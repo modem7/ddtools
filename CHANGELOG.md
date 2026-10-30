@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - **Deprecated:** `config.stamp`, `config.date_stamp` and `config.present` now warn with
   `DeprecationWarning` and name the function that replaces them; they go in 1.0.
 - **Changed:** `config.is_gone(member)` is the one test for a teammate who has left; `Document.audience`
