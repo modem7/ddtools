@@ -92,7 +92,9 @@ def load_source(char_dir: PathLike) -> dict:
 def party_names(ch: Character) -> list[str]:
     """Party members still in the party, in order."""
     party = ch.campaign.get("party") or []
-    return [m["name"] for m in party if m.get("status", "active") != "gone"]
+    from ddtools.config import is_gone
+
+    return [m["name"] for m in party if not is_gone(m)]
 
 
 def allies_text(src: dict, names: list[str]) -> tuple[str, list[str]]:

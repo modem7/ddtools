@@ -7,8 +7,10 @@ Build scripts call ``load_character()`` with no argument: ``ddtools build`` sets
 from __future__ import annotations
 
 import copy
+import functools
 import os
 import sys
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from dataclasses import fields as dataclass_fields
@@ -26,7 +28,8 @@ from ddtools.errors import DdtoolsError
 type PathLike = str | os.PathLike[str]
 
 Status = Literal["active", "retired"]
-AUDIENCES = ("private", "party", "dm")
+Audience = Literal["private", "party", "dm"]
+AUDIENCES: tuple[Audience, ...] = get_args(Audience)
 STATUSES: tuple[Status, ...] = get_args(Status)
 FILENAME = "character.yaml"
 BUILTIN_PREFIX = "ddtools:"  # a document script ddtools ships, e.g. ``ddtools:workbook``
@@ -57,7 +60,7 @@ class PartyMember(TypedDict):
 class Document:
     file: str
     script: str
-    audience: str
+    audience: Audience
     future_sections: list[str] = field(default_factory=list)
     spell_ignore: list[str] = field(default_factory=list)
 
@@ -288,13 +291,27 @@ def output_path(ch: Character, filename: str) -> Path:
     return out / filename
 
 
-# Old names, kept for campaigns' copied build scripts. Removed in 1.0: use
-# level_updated_label and updated_label.
-stamp = level_updated_label
-date_stamp = updated_label
+def _renamed[**P, R](old: str, new: Callable[P, R]) -> Callable[P, R]:
+    """``new`` under its old name, warning that the old name goes away in 1.0."""
+
+    @functools.wraps(new)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        warnings.warn(
+            f"config.{old} is renamed {new.__name__} and will be removed in 1.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return new(*args, **kwargs)
+
+    return wrapper
 
 
-def rules_rows(ch: Character, audience: str | None = None) -> list[list[str]]:
+# Old names, kept for campaigns' copied build scripts.
+stamp = _renamed("stamp", level_updated_label)
+date_stamp = _renamed("date_stamp", updated_label)
+
+
+def rules_rows(ch: Character, audience: Audience | None = None) -> list[list[str]]:
     """Rows for a Rules & Rulings table (header first) from ``campaign.rules``.
 
     A rule with ``show_in: [...]`` appears only in documents for those audiences.
@@ -475,26 +492,29 @@ def party_member(ch: Character, name: str) -> PartyMember | None:
     return None
 
 
+def is_gone(member: PartyMember) -> bool:
+    """True if the teammate has left the party for good."""
+    return member.get("status", "active") == "gone"
+
+
 def is_present(ch: Character, name: str) -> bool:
     """True if ``name`` is still in the party: on the list and not gone for good."""
     p = party_member(ch, name)
-    return p is not None and p.get("status", "active") != "gone"
+    return p is not None and not is_gone(p)
 
 
-present = is_present  # old name; removed in 1.0, use is_present
+present = _renamed("present", is_present)
 
 
 def absent_friends(ch: Character) -> list[PartyMember]:
     """Teammates gone for good, in party-list order."""
-    return [p for p in ch.campaign.get("party") or [] if p.get("status") == "gone"]
+    return [p for p in ch.campaign.get("party") or [] if is_gone(p)]
 
 
 def newcomers(ch: Character, known: list[str]) -> list[PartyMember]:
     """Teammates in the party whose names the documents don't have their own text for yet."""
     return [
-        p
-        for p in ch.campaign.get("party") or []
-        if p.get("status", "active") != "gone" and p.get("name") not in known
+        p for p in ch.campaign.get("party") or [] if not is_gone(p) and p.get("name") not in known
     ]
 
 

@@ -197,10 +197,10 @@ def cmd_summary(args: argparse.Namespace) -> int:
 @command("party", "Fetch every party member live: name, level, classes.", _dir_args)
 def cmd_party(args: argparse.Namespace) -> int:
     from ddtools import dndbeyond as ddb
-    from ddtools.config import load_character
+    from ddtools.config import is_gone, load_character
 
     ch = load_character(args.dir)
-    members = [p for p in ch.campaign.get("party") or [] if p.get("status") != "gone"]
+    members = [p for p in ch.campaign.get("party") or [] if not is_gone(p)]
     no_id = [p["name"] for p in members if not p.get("dndbeyond_id")]
     if no_id:
         print(
