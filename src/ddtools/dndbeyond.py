@@ -402,6 +402,8 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
     Never raises for a fetch or a bad file: problems go into ``result["errors"]``.
     """
     fetch = fetch or fetch_character
+    from ddtools.config import is_gone
+
     result: WatchResult = {
         "character": ch.name, "dir": Path(ch.dir).name, "own": None, "party": [], "errors": [],
     }  # fmt: skip
@@ -435,7 +437,7 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
         except SnapshotError as err:
             result["errors"].append(f"{ch.name}: {err}")
     for member in ch.campaign.get("party") or []:
-        if member.get("status") == "gone":
+        if is_gone(member):
             continue
         if not member.get("dndbeyond_id"):
             result["errors"].append(f"{member['name']}: no dndbeyond_id in the party list")

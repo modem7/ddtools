@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Deprecated:** `config.stamp`, `config.date_stamp` and `config.present` now warn with
+  `DeprecationWarning` and name the function that replaces them; they go in 1.0.
+- **Changed:** `config.is_gone(member)` is the one test for a teammate who has left; `Document.audience`
+  is typed `Audience` (`private`, `party` or `dm`).
 - **Fixed:** `ddtools preview --pages` with a bad value (`x`, `0`, `3-1`) is now a usage
   error (exit 2), not a traceback. `ddtools watch` reports a sheet that is not an object
   in its errors, as it does for other odd shapes.

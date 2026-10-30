@@ -137,9 +137,12 @@ def test_old_build_script_names_still_work(tmp_path):
     from ddtools import config
 
     ch = load_character(_write(tmp_path))
-    assert config.stamp(ch) == config.level_updated_label(ch) == "Level 3 · updated 28 Sep 2026"
-    assert config.date_stamp(ch) == config.updated_label(ch) == "updated 28 Sep 2026"
-    assert config.present is config.is_present
+    with pytest.warns(DeprecationWarning, match="level_updated_label"):
+        assert config.stamp(ch) == config.level_updated_label(ch) == "Level 3 · updated 28 Sep 2026"
+    with pytest.warns(DeprecationWarning, match="updated_label"):
+        assert config.date_stamp(ch) == config.updated_label(ch) == "updated 28 Sep 2026"
+    with pytest.warns(DeprecationWarning, match="is_present"):
+        assert config.present(ch, "Pal") is config.is_present(ch, "Pal")
     assert config.is_present(ch, "Pal") and not config.is_present(ch, "Nobody")
 
 
@@ -317,3 +320,11 @@ def test_add_party_member_without_a_name_is_a_config_error(tmp_path):
         with pytest.raises(ConfigError) as exc:
             add_party_member(d, entry)
         assert "needs a name" in str(exc.value)
+
+
+def test_is_gone_is_the_one_test_for_a_departed_member():
+    from ddtools import config
+
+    assert config.is_gone({"name": "A", "status": "gone"})
+    assert not config.is_gone({"name": "A"})
+    assert not config.is_gone({"name": "A", "status": "active"})
