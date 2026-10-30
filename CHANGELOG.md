@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Fixed:** `ddtools preview --pages` with a bad value (`x`, `0`, `3-1`) is now a usage
+  error (exit 2), not a traceback. `ddtools watch` reports a sheet that is not an object
+  in its errors, as it does for other odd shapes.
+- **Changed:** the last per-command error handlers are gone: `main()` reports every
+  `DdtoolsError` and `OSError` as `error: <message>` on stderr. A failed `build` now reads
+  `error: Build failed in <script>:` followed by the script's output. The `golden capture`
+  usage message goes to stderr (still exit 2). `report.run_watch` raises `ConfigError`
+  for a bad character folder instead of printing it.
 - **Changed:** field names in a PDF now start from 1 for each `ddtools.pdfstyle.build()`, so
   building the same story twice gives the same names. `ddtools.pdfstyle.ensure_fonts()` is
   the (repeatable) font registration that importing the module runs.

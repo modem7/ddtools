@@ -56,7 +56,7 @@ def _pattern(secret: Secret) -> re.Pattern:
     return re.compile(rf"(?<!\w){words}(?!\w)", 0 if secret.exact else re.IGNORECASE)
 
 
-def _flatten(pages: list[str], sep: str = " ") -> tuple[str, list[int]]:
+def flatten(pages: list[str], sep: str = " ") -> tuple[str, list[int]]:
     """All pages cleaned and joined with ``sep``, plus each page's start offset."""
     starts: list[int] = []
     flat = ""
@@ -66,7 +66,7 @@ def _flatten(pages: list[str], sep: str = " ") -> tuple[str, list[int]]:
     return flat, starts
 
 
-def _page_of(offset: int, starts: list[int]) -> int:
+def page_of(offset: int, starts: list[int]) -> int:
     return max(i for i, start in enumerate(starts) if start <= offset) + 1
 
 
@@ -76,12 +76,12 @@ def find_spoilers(pages: list[str], secrets: list[Secret]) -> list[SpoilerHit]:
     Pages are scanned as one text, so a secret split across a page break is still found
     (reported on the page where it starts).
     """
-    flat, starts = _flatten(pages)
+    flat, starts = flatten(pages)
     hits: list[SpoilerHit] = []
     for secret in secrets:
         for m in _pattern(secret).finditer(flat):
             ctx = flat[max(0, m.start() - 40) : m.end() + 40].strip()
-            hits.append({"page": _page_of(m.start(), starts), "term": secret.text, "context": ctx})
+            hits.append({"page": page_of(m.start(), starts), "term": secret.text, "context": ctx})
     return sorted(hits, key=lambda h: h["page"])
 
 

@@ -136,3 +136,23 @@ def test_a_bad_command_line_is_a_parse_error(argv, capsys):
         main(argv)
     assert exc.value.code == 2
     assert "error:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("pages", ["x", "0", "3-1", "1-", "-2", "a-b"])
+def test_a_bad_page_range_is_a_usage_error(pages, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["preview", "dir", "--pages", pages])
+    assert exc.value.code == 2
+    assert "--pages" in capsys.readouterr().err
+
+
+def test_a_failed_build_is_one_error_with_the_script_output(tmp_path, capsys):
+    import textwrap
+
+    from ddtools.lifecycle import new_character
+
+    d = new_character("Mossy Thistlewick", tmp_path, new_campaign="The Salt Road")
+    (d / "src" / "build_guide.py").write_text(textwrap.dedent("raise SystemExit('boom in script')"))
+    assert main(["build", str(d)]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: Build failed in ") and "boom in script" in err

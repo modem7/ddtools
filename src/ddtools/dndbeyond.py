@@ -392,6 +392,10 @@ def is_meaningful(d: SheetDiff) -> bool:
     return any(d.get(k) for k in MEANINGFUL)
 
 
+# What a sheet that is not the shape we expect raises when read.
+_BAD_SHAPE = (KeyError, TypeError, AttributeError)
+
+
 def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -> WatchResult:
     """Compare live sheets with the committed baselines for one character and its party.
 
@@ -413,7 +417,7 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
                 result["errors"].append(f"{ch.name}: no committed snapshot to compare against")
         except DndBeyondError as err:
             result["errors"].append(f"{ch.name}: {err}")
-        except (KeyError, TypeError) as err:
+        except _BAD_SHAPE as err:
             result["errors"].append(f"{ch.name}: unexpected sheet shape ({err!r})")
     party_file = snapshot_dir(ch) / "party.json"
     before = {}
@@ -441,7 +445,7 @@ def watch_character(ch: Character, fetch: Callable[[int], dict] | None = None) -
         except DndBeyondError as err:
             result["errors"].append(f"{member['name']}: {err}")
             continue
-        except (KeyError, TypeError) as err:
+        except _BAD_SHAPE as err:
             result["errors"].append(f"{member['name']}: unexpected sheet shape ({err!r})")
             continue
         was = before.get(now["id"])

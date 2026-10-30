@@ -262,7 +262,7 @@ def test_golden_check_no_baseline(golden_char, capsys):
 
 def test_golden_capture_needs_from_committed(golden_char, capsys):
     want = "`golden capture` needs --from-committed (use `golden update` to rebuild first).\n"
-    assert _run(capsys, ["golden", "capture", str(golden_char)]) == (2, want, "")
+    assert _run(capsys, ["golden", "capture", str(golden_char)]) == (2, "", want)
 
 
 def test_golden_capture_and_update(golden_char, monkeypatch, capsys):
