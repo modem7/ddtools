@@ -116,7 +116,7 @@ jobs:
         with:
           python-version: "3.15"
       - name: Compare
-        # The ddtools pin is left to Renovate, so it is ignored here.
+        # The ddtools pin is left to Renovate, so it and the recorded version are ignored here.
         run: |
           set -euo pipefail
           pip install -e .
@@ -124,6 +124,7 @@ jobs:
             --public --template --extends --funding modem7
           for d in template "$RUNNER_TEMP/expected"; do
             sed -i -E 's/ddtools\.git@v[0-9.]+/ddtools.git@vX/' "$d/requirements.txt"
+            sed -i -E 's/^version: [0-9.]+$/version: X/' "$d/.ddtools-init.yaml"
           done
           # The template repo also carries README screenshots (docs/ and a
           # "What it makes" section) that init doesn't write.
