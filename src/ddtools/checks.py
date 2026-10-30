@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING, TypedDict
 from ddtools.dndbeyond import latest_snapshots, load_snapshot, summarise
 from ddtools.golden import Heading, headings_from_script, locate_headings
 from ddtools.secrets import (
-    _flatten,
-    _page_of,
     clean,
     find_spoilers,
+    flatten,
     load_character_secrets,
+    page_of,
 )
 from ddtools.textdump import page_texts
 
@@ -84,7 +84,7 @@ def find_future_spells(
     if not candidates:
         return []
     spell_re = re.compile(r"(?<![\w'-])(" + "|".join(map(re.escape, candidates)) + r")(?![\w'-])")
-    flat, page_starts = _flatten(pages, "\n")
+    flat, page_starts = flatten(pages, "\n")
     future = _future_ranges(flat, page_starts, headings, future_sections)
     hits: list[FutureSpellHit] = []
     for m in spell_re.finditer(flat):
@@ -97,7 +97,7 @@ def find_future_spells(
         if _LEVEL_LABEL.search(sentence):
             continue
         hits.append(
-            {"page": _page_of(m.start(), page_starts), "spell": m.group(1), "sentence": sentence}
+            {"page": page_of(m.start(), page_starts), "spell": m.group(1), "sentence": sentence}
         )
     return hits
 

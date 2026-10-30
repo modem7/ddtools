@@ -111,3 +111,11 @@ def test_unexpected_sheet_shape_is_reported_not_raised(char, monkeypatch):
     )
     result = ddb.watch_character(load_character(char))
     assert result["errors"], "a sheet missing 'definition' must be reported"
+
+
+def test_a_sheet_that_is_not_an_object_is_reported_not_raised(char, monkeypatch):
+    from ddtools.config import load_character
+
+    monkeypatch.setattr(ddb, "fetch_character", lambda cid: ["not", "a", "sheet"])
+    result = ddb.watch_character(load_character(char))
+    assert any("unexpected sheet shape" in e for e in result["errors"])

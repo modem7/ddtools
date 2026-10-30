@@ -15,7 +15,7 @@ class BuildError(DdtoolsError):
     """A build script failed. ``script`` is its path, ``stderr`` its error output."""
 
     def __init__(self, script: Path, stderr: str):
-        super().__init__(f"Build failed in {script}")
+        super().__init__(f"Build failed in {script}:\n{stderr}")
         self.script = script
         self.stderr = stderr
 

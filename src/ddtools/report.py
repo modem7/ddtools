@@ -87,18 +87,16 @@ def run_watch(
     """Compare live sheets with the snapshots and print (and write) what changed.
 
     ``dirs`` empty means every character under the current folder; only active ones
-    are fetched. Errors go to stderr. Returns 0 for no changes, 3 for changes, 1 for
-    any error (changes are still printed and written first).
+    are fetched. Returns 0 for no changes, 3 for changes, 1 for a fetch error (changes
+    are still printed and written first).
+
+    Raises:
+        ConfigError: a character folder has no valid character.yaml.
     """
     from ddtools import dndbeyond as ddb
     from ddtools.config import character_dirs, load_character
-    from ddtools.errors import DdtoolsError
 
-    try:
-        chars = [load_character(d) for d in (dirs or character_dirs(Path.cwd()))]
-    except DdtoolsError as err:
-        print(f"error: {err}", file=sys.stderr)
-        return 1
+    chars = [load_character(d) for d in (dirs or character_dirs(Path.cwd()))]
     chars = [c for c in chars if c.status == "active"]
     results = [ddb.watch_character(c) for c in chars]
     errors = [e for r in results for e in r["errors"]]

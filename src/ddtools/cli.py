@@ -42,23 +42,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         return args.func(args)
-    except DdtoolsError as err:
+    except (DdtoolsError, OSError) as err:  # an OSError is a failed write, rolled back
         print(f"error: {err}", file=sys.stderr)
         return 1
 
 
-def _page_range(text: str | None) -> range | None:
+def _page_range(text: str) -> range:
     """Parse ``A-B`` or ``A`` (1-based, inclusive) into a 0-based range."""
-    if not text:
-        return None
-    first, _, last = text.partition("-")
-    return range(int(first) - 1, int(last or first))
+    first, dash, last = text.partition("-")
+    if not (first.isdecimal() and (last.isdecimal() or not dash and not last)):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a page or range like 2 or 2-3")
+    start, end = int(first), int(last or first)
+    if start < 1 or end < start:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a page or range like 2 or 2-3")
+    return range(start - 1, end)
 
 
 def _preview_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("dir", help="character folder (its PDFs are in <dir>/pdf)")
     p.add_argument("--pdf", help="only this PDF (file name, with or without .pdf)")
-    p.add_argument("--pages", help="page range, e.g. 2-3 (default: all pages)")
+    p.add_argument("--pages", type=_page_range, help="page range, e.g. 2-3 (default: all pages)")
 
 
 @command("preview", "Render PDF pages to a contact-sheet PNG in tmp/.", _preview_args)
@@ -76,7 +79,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
         return 1
     for pdf in pdfs:
         out = Path.cwd() / "tmp" / f"preview-{pdf.stem}.png"
-        print(contact_sheet(pdf, out, pages=_page_range(args.pages)))
+        print(contact_sheet(pdf, out, pages=args.pages))
     return 0
 
 
@@ -106,7 +109,10 @@ def cmd_golden(args: argparse.Namespace) -> int:
     if args.action == "check":
         return golden.check_character(ch, dest)
     if args.action == "capture" and not args.from_committed:
-        print("`golden capture` needs --from-committed (use `golden update` to rebuild first).")
+        print(
+            "`golden capture` needs --from-committed (use `golden update` to rebuild first).",
+            file=sys.stderr,
+        )
         return 2
     return golden.record_character(ch, dest, rebuild=args.action == "update")
 
@@ -118,15 +124,11 @@ def _build_args(p: argparse.ArgumentParser) -> None:
 
 @command("build", "Build a character's PDFs (and .txt copies) from its scripts.", _build_args)
 def cmd_build(args: argparse.Namespace) -> int:
-    from ddtools.build import BuildError, build_character
+    from ddtools.build import build_character
     from ddtools.preview import page_count
 
-    try:
-        for pdf in build_character(args.dir, args.out):
-            print(f"{pdf}  ({page_count(pdf)} pages)")
-    except BuildError as err:
-        print(f"Build failed in {err.script}:\n{err.stderr}", file=sys.stderr)
-        return 1
+    for pdf in build_character(args.dir, args.out):
+        print(f"{pdf}  ({page_count(pdf)} pages)")
     return 0
 
 
@@ -210,8 +212,7 @@ def cmd_party(args: argparse.Namespace) -> int:
         try:
             rows.append(ddb.party_entry(ddb.fetch_character(member["dndbeyond_id"])))
         except ddb.DndBeyondError as err:
-            print(f"{member['name']}: {err}", file=sys.stderr)
-            return 1
+            raise ddb.DndBeyondError(f"{member['name']}: {err}") from err
     if args.json:
         _print_json(rows)
     else:
@@ -330,11 +331,7 @@ def cmd_retire(args: argparse.Namespace) -> int:
 
     from ddtools.lifecycle import retire
 
-    try:
-        dest = retire(Path(args.dir), args.reason, args.note, Path.cwd())
-    except OSError as err:  # a failed write or move, rolled back
-        print(f"error: {err}", file=sys.stderr)
-        return 1
+    dest = retire(Path(args.dir), args.reason, args.note, Path.cwd())
     print(f"Retired to {dest}. Read {dest / 'RETIRED.md'} for threads to carry forward.")
     return 0
 
@@ -429,11 +426,7 @@ def cmd_import_workbook(args: argparse.Namespace) -> int:
 
     from ddtools.workbook_import import import_workbook
 
-    try:
-        got = import_workbook(Path(args.pdf), Path(args.dir))
-    except OSError as err:  # a failed write, already rolled back
-        print(f"error: {err}", file=sys.stderr)
-        return 1
+    got = import_workbook(Path(args.pdf), Path(args.dir))
     print(f"Wrote {got['answers']}")
     for line in got["filled"]:
         print(f"Filled in character.yaml: {line}")
