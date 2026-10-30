@@ -149,7 +149,7 @@ def fetch_character(char_id: int, timeout: float = 20) -> dict:
     """
     req = Request(API.format(id=char_id), headers={"User-Agent": "ddtools/0.1"})
     try:
-        with urlopen(req, timeout=timeout) as resp:
+        with urlopen(req, timeout=timeout) as resp:  # nosec B310 - API is an https constant
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
         if err.code in (401, 403, 404):

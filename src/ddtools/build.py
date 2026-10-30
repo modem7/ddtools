@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404 - running the character's own build scripts is the job
 from pathlib import Path
 
 from ddtools.config import PathLike, load_character
@@ -38,7 +38,7 @@ def build_character(char_dir: PathLike, out: PathLike | None = None) -> list[Pat
         script, cmd, cwd = doc.command(ch.dir)
         pdf = out_dir / Path(doc.file).name
         pdf.unlink(missing_ok=True)
-        run = subprocess.run(
+        run = subprocess.run(  # nosec B603 - an argument list, no shell
             cmd,
             cwd=cwd,
             env=env,
