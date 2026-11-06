@@ -6,8 +6,6 @@
   `error: Build failed in <script>:` on stderr, like `build`, instead of `Build failed in ...`
   on stdout. The 0.3.0 notes already said this. Scripts that read stdout for it need to read stderr.
 
-- **Fixed:** repos made by `ddtools init` no longer tell you to install `fonts-dejavu-core`,
-  and their CI no longer installs it. The fonts have come with the package since 0.3.0.
 - **Fixed:** the README install line, the `--json` note, the `check --pdf-dir` flag and the
   must-pass checks (`mypy` was missing) now match the code.
 
