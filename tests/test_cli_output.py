@@ -311,8 +311,8 @@ Doc: differs
 def test_golden_build_failure(golden_char, monkeypatch, capsys, action):
     _run(capsys, ["golden", "capture", str(golden_char), "--from-committed"])
     _fake_build(monkeypatch, fail=True)
-    want = "Build failed in src/build_doc.py:\nboom\n"
-    assert _run(capsys, ["golden", action, str(golden_char)]) == (1, want, "")
+    want = "error: Build failed in src/build_doc.py:\nboom\n"
+    assert _run(capsys, ["golden", action, str(golden_char)]) == (1, "", want)
 
 
 def test_golden_bad_folder(tmp_path, capsys):

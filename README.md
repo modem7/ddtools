@@ -237,7 +237,7 @@ Unknown top-level keys in `character.yaml` are kept in `Character.extra` for plu
 
 ![desloppify scorecard](docs/images/scorecard.png)
 
-Code health as scored by desloppify at 0.3.0 (strict 78.6 of 100).
+Code health of ddtools 0.3.0, as scored by desloppify v1.0 (strict 78.6 of 100).
 
 ```bash
 pip install -r requirements-dev.txt

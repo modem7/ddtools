@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fixed:** a failed build in `ddtools golden check` or `golden update` now prints
+  `error: Build failed in <script>:` on stderr, like `build`, instead of `Build failed in ...`
+  on stdout. The 0.3.0 notes already said this. Scripts that read stdout for it need to read stderr.
+
 - **Fixed:** repos made by `ddtools init` no longer tell you to install `fonts-dejavu-core`,
   and their CI no longer installs it. The fonts have come with the package since 0.3.0.
 - **Fixed:** the README install line, the `--json` note, the `check --pdf-dir` flag and the
@@ -9,15 +13,15 @@
 
 ## 0.3.0
 
-- **Deprecated:** `config.stamp`, `config.date_stamp` and `config.present` now warn with
-  `DeprecationWarning` and name the function that replaces them; they go in 1.0.
 - **Changed:** `config.is_gone(member)` is the one test for a teammate who has left; `Document.audience`
   is typed `Audience` (`private`, `party` or `dm`).
 - **Fixed:** `ddtools preview --pages` with a bad value (`x`, `0`, `3-1`) is now a usage
-  error (exit 2), not a traceback. `ddtools watch` reports a sheet that is not an object
-  in its errors, as it does for other odd shapes.
+  error (exit 2), not a traceback.
 - **Changed:** the last per-command error handlers are gone: `main()` reports every
-  `DdtoolsError` and `OSError` as `error: <message>` on stderr. A failed `build` now reads
+  `DdtoolsError` and `OSError` once, as `error: <message>` on stderr (exit code 1).
+  Messages that used to go to stdout (bad snapshots, missing folders, `Build failed in ...`
+  from `build` and `golden`, `sheet-text` problems, unknown blueprint) are now on stderr, so
+  scripts that read stdout for them need to read stderr. A failed `build` reads
   `error: Build failed in <script>:` followed by the script's output. The `golden capture`
   usage message goes to stderr (still exit 2). `report.run_watch` raises `ConfigError`
   for a bad character folder instead of printing it.
@@ -35,8 +39,6 @@
   and they use `level_updated_label` instead of `stamp`. The PDFs are the same. The
   `dnd-campaign-template` repo's copies change to match `ddtools init`.
 - **Removed:** `ddtools.sheettext.status`. Use `field_status`.
-- **Deprecated:** `stamp`, `date_stamp` and `present` in `ddtools.config` will be removed in
-  1.0. Use `level_updated_label`, `updated_label` and `is_present`.
 - **Changed:** the secrets code (`Secret`, `SpoilerHit`, `clean`, `load_secrets`,
   `find_spoilers`) moved from `ddtools.checks` to a new `ddtools.secrets`, which imports no
   PDF code, so `sheettext` and `lifecycle` no longer load PDF rendering. A missing secrets
@@ -48,10 +50,6 @@
   types, and a `script` that stays inside the character folder) and the `retired:` block,
   and raises `ConfigError` naming the entry, not a `TypeError`. `add_party_member` raises
   `ConfigError` for an entry without a name, not a `KeyError`.
-- **Changed:** every command prints a `DdtoolsError` once, as `error: <message>` on stderr
-  (exit code 1), caught in `main()`. Messages that used to go to stdout (bad snapshots,
-  missing folders, `Build failed in ...`, `sheet-text` problems, unknown blueprint) are now on
-  stderr, so scripts that read stdout for them need to read stderr.
 - **Changed:** `DuplicateCommandError` is a `DdtoolsError` (still a `ValueError`).
 - **Fixed:** `watch` reports a sheet with an unexpected shape, or a bad `party.json`, in its
   errors list instead of raising.
@@ -87,7 +85,8 @@
   traceback. A party member's `name` must be text: write `name: "1984"` (or `"No"`) in
   quotes, or `load_character` reports which `campaign.party` entry is wrong.
 - **Changed:** clearer names in `ddtools.config` for build scripts. The old names still
-  work, so existing build scripts need no change.
+  work, so existing build scripts need no change, but they now warn with
+  `DeprecationWarning` and name the function that replaces them.
 
   | Old | New |
   |---|---|
@@ -119,7 +118,6 @@
   Registering a taken name directly raises `DuplicateCommandError`.
 - **Changed:** `ddtools.plugins` no longer imports `ddtools.cli`. The private
   `ddtools.cli._COMMANDS` list is gone; use `ddtools.registry.COMMANDS`.
-- **Changed:** `ddtools.sheettext.status` is now `field_status`. The old name was removed.
 
 ## 0.2.0
 
