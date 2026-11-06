@@ -12,7 +12,7 @@
 - Write the test first, then the change (`pytest`).
 - Tests use made-up characters and `tests/fixtures/`. Never a real character, and never a
   call to D&D Beyond.
-- `ruff check .` and `ruff format --check .` must be clean.
+- `ruff check .`, `ruff format --check .` and `mypy` must be clean.
 - A change to `ddtools.pdfstyle` changes every campaign's PDFs: say so in the PR.
 - Update `README.md` and `CHANGELOG.md` if needed.
 

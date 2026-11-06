@@ -7,8 +7,8 @@
 
 ## Rules
 
-- **TDD.** Write the failing test first. `pytest` and `ruff check . && ruff format --check .`
-  must pass before any push.
+- **TDD.** Write the failing test first. `pytest`, `ruff check . && ruff format --check .`
+  and `mypy` must pass before any push.
 - **Tests use made-up characters** (`tests/conftest.py`, `make_campaign`) and
   `tests/fixtures/`. Never a real character's sheet, secrets or names, and never a call
   to D&D Beyond.

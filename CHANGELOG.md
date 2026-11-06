@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fixed:** repos made by `ddtools init` no longer tell you to install `fonts-dejavu-core`,
+  and their CI no longer installs it. The fonts have come with the package since 0.3.0.
+- **Fixed:** the README install line, the `--json` note, the `check --pdf-dir` flag and the
+  must-pass checks (`mypy` was missing) now match the code.
+
 ## 0.3.0
 
 - **Deprecated:** `config.stamp`, `config.date_stamp` and `config.present` now warn with
@@ -114,7 +119,7 @@
   Registering a taken name directly raises `DuplicateCommandError`.
 - **Changed:** `ddtools.plugins` no longer imports `ddtools.cli`. The private
   `ddtools.cli._COMMANDS` list is gone; use `ddtools.registry.COMMANDS`.
-- **Changed:** `ddtools.sheettext.status` is now `field_status`. The old name still works.
+- **Changed:** `ddtools.sheettext.status` is now `field_status`. The old name was removed.
 
 ## 0.2.0
 
