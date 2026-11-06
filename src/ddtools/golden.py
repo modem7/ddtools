@@ -206,20 +206,16 @@ def compare(
 def record_character(ch: Character, dest: PathLike, rebuild: bool) -> int:
     """Capture a baseline for every document, from a fresh build or the committed PDFs.
 
-    Prints one line per document (and a warning per heading not found). Returns 1 if
-    the build fails, else 0.
+    Prints one line per document (and a warning per heading not found). A failed build
+    raises ``BuildError``, which ``main`` prints once on stderr and turns into exit 1.
     """
-    from ddtools.build import BuildError, build_character
+    from ddtools.build import build_character
 
     with tempfile.TemporaryDirectory() as tmp:
         pdf_dir = ch.dir / "pdf"
         if rebuild:
             pdf_dir = Path(tmp)
-            try:
-                build_character(ch.dir, pdf_dir)
-            except BuildError as err:
-                print(f"Build failed in {err.script}:\n{err.stderr}")
-                return 1
+            build_character(ch.dir, pdf_dir)
         for doc in ch.documents:
             stem = Path(doc.file).stem
             data = capture(pdf_dir / f"{stem}.pdf", doc.source(ch.dir), dest, name=stem)
@@ -233,10 +229,11 @@ def record_character(ch: Character, dest: PathLike, rebuild: bool) -> int:
 def check_character(ch: Character, dest: PathLike) -> int:
     """Rebuild into a temporary folder and compare every document with its baseline.
 
-    Prints one line per document. Returns 1 if the build fails or anything differs.
+    Prints one line per document. Returns 1 if anything differs. A failed build raises
+    ``BuildError``, which ``main`` prints once on stderr and turns into exit 1.
     No baseline folder yet is not a failure.
     """
-    from ddtools.build import BuildError, build_character
+    from ddtools.build import build_character
 
     dest = Path(dest)
     if not dest.is_dir():
@@ -246,11 +243,7 @@ def check_character(ch: Character, dest: PathLike) -> int:
         )
         return 0
     with tempfile.TemporaryDirectory() as tmp:
-        try:
-            build_character(ch.dir, Path(tmp))
-        except BuildError as err:
-            print(f"Build failed in {err.script}:\n{err.stderr}")
-            return 1
+        build_character(ch.dir, Path(tmp))
         failed = False
         for doc in ch.documents:
             stem = Path(doc.file).stem

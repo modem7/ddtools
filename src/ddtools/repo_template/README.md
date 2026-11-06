@@ -29,7 +29,7 @@ ddtools import-workbook filled.pdf Name
 ddtools build Name && ddtools check Name
 ```
 
-DejaVu fonts are required (`sudo apt-get install fonts-dejavu-core`). Every command:
+The DejaVu fonts come with ddtools. Every command:
 `ddtools --help`.
 
 ## Layout

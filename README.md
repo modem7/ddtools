@@ -44,11 +44,11 @@ secret and a spell that isn't on the sheet into the party handout, and `check` f
 Python 3.12 or later. The DejaVu fonts the documents use come with the package.
 
 ```bash
-pip install "ddtools @ git+https://github.com/modem7/ddtools.git@v0.2.0"
+pip install "ddtools @ git+https://github.com/modem7/ddtools.git@v0.3.0"
 ddtools --version
 ```
 
-Every command has `--help`. Commands that report data take `--json`.
+Every command has `--help`. `list`, `diff` and `watch` also take `--json`.
 
 ## Start a campaign repo
 
@@ -68,7 +68,7 @@ Every command has `--help`. Commands that report data take `--json`.
 | Command | What it does |
 |---|---|
 | `ddtools build <dir> [--out DIR]` | Runs each document script listed in `<dir>/character.yaml`. Writes the PDFs (and a `.txt` copy of each) to `<dir>/pdf/`, or to `--out`. Stops at the first failing script, names it and prints its error. |
-| `ddtools check <dir>` | Checks every `audience: party` document. **Spoilers:** any entry from `secrets.txt`, ignoring case and curly quotes, even if it's split across lines. **Spells:** any spell not on the latest snapshot, unless its sentence has a level label ("at level 4", "(level 8+)"), it sits under a `future_sections` heading, or it's in `spell_ignore`. Exits 1 if it finds anything. |
+| `ddtools check <dir> [--pdf-dir DIR]` | Checks every `audience: party` document, reading the PDFs in `--pdf-dir` instead of `<dir>/pdf` if given. **Spoilers:** any entry from `secrets.txt`, ignoring case and curly quotes, even if it's split across lines. **Spells:** any spell not on the latest snapshot, unless its sentence has a level label ("at level 4", "(level 8+)"), it sits under a `future_sections` heading, or it's in `spell_ignore`. Exits 1 if it finds anything. |
 | `ddtools preview <dir> [--pdf NAME] [--pages A-B]` | Renders pages to `tmp/preview-<name>.png` so the layout can be checked by eye. |
 | `ddtools golden update <dir>` | Rebuilds and records a new golden baseline in `tests/golden/<dir>/`. Only use it when a change was intended, and commit it with that change. |
 | `ddtools golden check <dir>` | Rebuilds and compares with the baseline. Exits 1 on any difference. |
@@ -237,12 +237,13 @@ Unknown top-level keys in `character.yaml` are kept in `Character.extra` for plu
 
 ![desloppify scorecard](docs/images/scorecard.png)
 
-Code health as scored by desloppify at 0.3.0 (strict 78.6 of 100).
+Code health of ddtools 0.3.0, as scored by desloppify v1.0 (strict 78.6 of 100).
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
 ruff check . && ruff format --check .
+mypy
 ```
 
 - Tests use made-up characters (`tests/conftest.py`) and `tests/fixtures/`. They never
