@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.3.1
+
+- **Changed:** `pypdf` is now `>=7,<8`, so projects can use pypdf 7 alongside ddtools.
 - **Fixed:** a failed build in `ddtools golden check` or `golden update` now prints
   `error: Build failed in <script>:` on stderr, like `build`, instead of `Build failed in ...`
   on stdout. The 0.3.0 notes already said this. Scripts that read stdout for it need to read stderr.
